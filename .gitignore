@@ -1,0 +1,7 @@
+/target
+/.idea/
+**/*.iml
+/res/
+/pubs/_site/
+/pubs/node_modules/
+
