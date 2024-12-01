@@ -1,0 +1,34 @@
+{
+  "name": "advent-of-code-2024-pubs",
+  "version": "1.0.0",
+  "description": "Write ups of my advent of code 2024 solutions using 11ty static site builder",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "concurrently \"npm:watch:*\"",
+    "watch:11ty": "eleventy --serve --port=8081",
+    "watch:scss": "sass -Inode_modules/foundation-sites/scss _includes/stylesheets:_site/assets/styles --watch",
+    "build": "rm -rf _site && mkdir _site && cp -r ../target/doc/* ./_site && sass -Inode_modules/foundation-sites/scss _includes/stylesheets:_site/assets/styles && eleventy"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kamioftea/advent-of-code-2024/pubs"
+  },
+  "author": "Jeff Horton <jeff@goblinoid.co.uk>",
+  "license": "ISC",
+  "dependencies": {
+    "@11ty/eleventy": "^3.0.0",
+    "concurrently": "^9.1.0",
+    "feather-icons": "^4.29.2",
+    "foundation-sites": "^6.9.0",
+    "highlight.js": "^11.10.0",
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0",
+    "markdown-it-deflist": "^3.0.0",
+    "markdown-it-mathjax": "^2.0.0",
+    "sass": "^1.81.0"
+  },
+  "devDependencies": {
+    "@11ty/eleventy-plugin-inclusive-language": "^1.0.3"
+  }
+}

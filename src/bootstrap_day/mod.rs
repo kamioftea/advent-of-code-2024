@@ -40,7 +40,7 @@ pub fn bootstrap_day(day: u8) -> Result<()> {
 
     let rust_filename = format!("src/day_{}.rs", day);
     let rust_contents = format!("\
-//! This is my solution for [Advent of Code - Day {day}: _???_](https://adventofcode.com/2023/day/{day})
+//! This is my solution for [Advent of Code - Day {day}: _???_](https://adventofcode.com/2024/day/{day})
 //!
 //!
 

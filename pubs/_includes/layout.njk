@@ -1,0 +1,92 @@
+<!doctype html>
+<!--suppress HtmlUnknownTarget -->
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="{{ '/assets/styles/root.css' | url}}">
+	<link rel="stylesheet" href="{{ '/assets/styles/a11y-dark.css' | url}}">
+	<link rel="alternate icon" type="image/png" href="{{ "/favicon-16x16.png" | url }}">
+	<link rel="alternate icon" type="image/png" href="{{ "/favicon-32x32.png" | url }}">
+	<link rel="icon" type="image/svg+xml" href="{{ "/favicon.svg" | url }}">
+
+	<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+	<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+	<script>
+		window.MathJax = {
+            options: {
+                enableMenu: false,
+            }
+		}
+	</script>
+
+	<title>{{ title }}</title>
+
+	<!-- Primary Meta Tags -->
+	<meta name="title" content="{{ title }}">
+	<meta name="description" content="{{ description | trim }}">
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="website">
+	<meta property="og:url" content="https://kamioftea.github.io{{ page.url | url }}">
+	<meta property="og:title" content="{{ title }}">
+	<meta property="og:description" content="{{ description | trim }}">
+	<meta property="og:image" content="https://kamioftea.github.io{{ '/assets/images/cover-image.png' | url }}">
+
+	<!-- Twitter -->
+	<meta property="twitter:card" content="summary">
+	<meta property="twitter:url" content="https://kamioftea.github.io{{ page.url | url }}">
+	<meta property="twitter:title" content="{{ title }}">
+	<meta property="twitter:description" content="{{ description | trim }}">
+	<meta property="twitter:image" content="https://kamioftea.github.io{{ '/assets/images/cover-image.png' | url }}">
+</head>
+<body>
+	<header class="cover-image"
+	        style="background-image: url('{{ '/assets/images/cover-image.png' | url }}')">
+		<div class="title-wrapper">
+		<h1>{{ header }}</h1>
+		</div>
+	</header>
+	<main>
+		{% if day %}
+			<nav aria-label="You are here:" role="navigation">
+				<ul class="breadcrumbs">
+					<li><a href="{{ '/' | url }}">Jeff's Advent of Code 2024</a></li>
+					<li><span class="show-for-sr">Current: </span>Day {{ day }}</li>
+				</ul>
+			</nav>
+		{% endif %}
+	    {{ content | safe }}
+		{% if day %}
+			<nav aria-label="Related content" class="related-content">
+				{% if solutions[day - 2] %}
+					<a href="{{ solutions[day - 2].links['Write Up'] | url}}"
+					   class="prev-link"
+					>
+						&lt; Day {{ day - 1 }}: {{ solutions[day - 2].title }}
+					</a>
+				{% endif %}
+
+				{% if solutions[day] %}
+					<a href="{{ solutions[day].links['Write Up'] | url }}"
+					   class="next-link"
+					>
+						Day {{ day + 1 }}: {{ solutions[day].title }} &gt;
+					</a>
+				{% endif %}
+				<div class="other-links">
+					<p>Related content:</p>
+					<ul>
+						{% for label, href in solutions[day - 1].links %}
+							{% if label != 'Write Up' %}
+								<li><a href="{{ href | url }}">{{ label }}</a></li>
+							{% endif %}
+						{% endfor %}
+					</ul>
+					<p>or go to this year's <a href="{{ '/' | url }}">solution list</a></p>
+				</div>
+			</nav>
+		{% endif %}
+	</main>
+</body>
+</html>

@@ -1,8 +1,8 @@
-# Advent of Code 2023
+# Advent of Code 2024
 
 [Advent of Code Website](https://adventofcode.com/)
 
-Scripts written to solve the 2023 edition of Advent of Code. This has become my yearly dabble into Rust. I feel I get 
+Scripts written to solve the 2024 edition of Advent of Code. This has become my yearly dabble into Rust. I feel I get 
 up to speed quicker each year, and it is very hard to give up the speed that rust can solve what usually tend to be 
 quite low-level challenges.
 
@@ -30,7 +30,7 @@ This:
 - Builds the docs
 - Builds the static site
 - Bundles them into an artefact suitable for GitHub pages
-- Deploys the bundle to the repositories [GitHub Pages site](https://kamioftea.github.io/advent-of-code-2023).
+- Deploys the bundle to the repositories [GitHub Pages site](https://kamioftea.github.io/advent-of-code-2024).
 
 ## Previous years:
 

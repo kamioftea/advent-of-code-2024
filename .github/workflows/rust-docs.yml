@@ -11,36 +11,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
 
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Build Docs
-      run: |
-        cargo doc
+      - name: Build Docs
+        run: |
+          cargo doc
 
-    - name: Build Blog
-      env:
-        PATH_PREFIX: /advent-of-code-2023
-      run: |
-        cd pubs
-        npm ci
-        npm run build
+      - name: Build Blog
+        env:
+          PATH_PREFIX: /advent-of-code-2024
+        run: |
+          cd pubs
+          npm ci
+          npm run build
 
-    - name: Upload artefact
-      uses: actions/upload-pages-artifact@v1
-      with:
-        path: pubs/_site
+      - name: Upload artefact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: pubs/_site
 
   deploy:
     runs-on: ubuntu-latest
