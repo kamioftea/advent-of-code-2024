@@ -10,7 +10,10 @@ use std::fs;
 /// - The puzzle input is expected to be at `<project_root>/res/day-2-input`
 /// - It is expected this will be called by [`super::main()`] when the user elects to run day 2.
 pub fn run() {
-    let _contents = fs::read_to_string("res/day-2-input.txt").expect("Failed to read file");
+    let contents = fs::read_to_string("res/day-2-input.txt").expect("Failed to read file");
+    let reports = parse_input(&contents);
+
+    println!("There are {} safe reports", analyse_reports(&reports));
 }
 
 type Report = Vec<u32>;
@@ -42,7 +45,10 @@ fn is_report_safe(report: &Report) -> bool {
 }
 
 fn analyse_reports(reports: &Vec<Report>) -> usize {
-    todo!()
+    reports
+        .into_iter()
+        .filter(|&report| is_report_safe(report))
+        .count()
 }
 
 #[cfg(test)]
@@ -84,6 +90,7 @@ mod tests {
         assert_eq!(is_report_safe(&vec![1, 3, 6, 7, 9]), true);
     }
 
+    #[test]
     fn can_analyse_reports() {
         assert_eq!(
             analyse_reports(&vec![
