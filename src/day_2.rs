@@ -26,28 +26,28 @@ fn parse_input(input: &String) -> Vec<Report> {
     input.lines().map(parse_line).collect()
 }
 
-fn is_report_safe(report: &Report) -> bool {
+fn first_bad_level_pair(report: &Report) -> Option<usize> {
     let mut maybe_direction = None;
-    for (&l, &r) in report.iter().tuple_windows() {
+    for (idx, (&l, &r)) in report.iter().tuple_windows().enumerate() {
         if l == r || l.abs_diff(r) > 3 {
-            return false;
+            return Some(idx);
         }
 
         maybe_direction = maybe_direction.or_else(|| Some(l > r));
         let direction = maybe_direction.unwrap();
 
         if direction ^ (l > r) {
-            return false;
+            return Some(idx);
         }
     }
 
-    true
+    None
 }
 
 fn analyse_reports(reports: &Vec<Report>) -> usize {
     reports
         .into_iter()
-        .filter(|&report| is_report_safe(report))
+        .filter(|&report| first_bad_level_pair(report).is_none())
         .count()
 }
 
@@ -82,12 +82,12 @@ mod tests {
 
     #[test]
     fn can_check_if_a_report_is_safe() {
-        assert_eq!(is_report_safe(&vec![7, 6, 4, 2, 1]), true);
-        assert_eq!(is_report_safe(&vec![1, 2, 7, 8, 9]), false);
-        assert_eq!(is_report_safe(&vec![9, 7, 6, 2, 1]), false);
-        assert_eq!(is_report_safe(&vec![1, 3, 2, 4, 5]), false);
-        assert_eq!(is_report_safe(&vec![8, 6, 4, 4, 1]), false);
-        assert_eq!(is_report_safe(&vec![1, 3, 6, 7, 9]), true);
+        assert_eq!(first_bad_level_pair(&vec![7, 6, 4, 2, 1]), None);
+        assert_eq!(first_bad_level_pair(&vec![1, 2, 7, 8, 9]), Some(1));
+        assert_eq!(first_bad_level_pair(&vec![9, 7, 6, 2, 1]), Some(2));
+        assert_eq!(first_bad_level_pair(&vec![1, 3, 2, 4, 5]), Some(1));
+        assert_eq!(first_bad_level_pair(&vec![8, 6, 4, 4, 1]), Some(2));
+        assert_eq!(first_bad_level_pair(&vec![1, 3, 6, 7, 9]), None);
     }
 
     #[test]
