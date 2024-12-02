@@ -2,6 +2,7 @@
 //!
 //!
 
+use itertools::Itertools;
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -20,6 +21,28 @@ fn parse_line(line: &str) -> Report {
 
 fn parse_input(input: &String) -> Vec<Report> {
     input.lines().map(parse_line).collect()
+}
+
+fn is_report_safe(report: &Report) -> bool {
+    let mut maybe_direction = None;
+    for (&l, &r) in report.iter().tuple_windows() {
+        if l == r || l.abs_diff(r) > 3 {
+            return false;
+        }
+
+        maybe_direction = maybe_direction.or_else(|| Some(l > r));
+        let direction = maybe_direction.unwrap();
+
+        if direction ^ (l > r) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn analyse_reports(reports: &Vec<Report>) -> usize {
+    todo!()
 }
 
 #[cfg(test)]
@@ -48,6 +71,30 @@ mod tests {
                 vec![8, 6, 4, 4, 1],
                 vec![1, 3, 6, 7, 9],
             ]
+        )
+    }
+
+    #[test]
+    fn can_check_if_a_report_is_safe() {
+        assert_eq!(is_report_safe(&vec![7, 6, 4, 2, 1]), true);
+        assert_eq!(is_report_safe(&vec![1, 2, 7, 8, 9]), false);
+        assert_eq!(is_report_safe(&vec![9, 7, 6, 2, 1]), false);
+        assert_eq!(is_report_safe(&vec![1, 3, 2, 4, 5]), false);
+        assert_eq!(is_report_safe(&vec![8, 6, 4, 4, 1]), false);
+        assert_eq!(is_report_safe(&vec![1, 3, 6, 7, 9]), true);
+    }
+
+    fn can_analyse_reports() {
+        assert_eq!(
+            analyse_reports(&vec![
+                vec![7, 6, 4, 2, 1],
+                vec![1, 2, 7, 8, 9],
+                vec![9, 7, 6, 2, 1],
+                vec![1, 3, 2, 4, 5],
+                vec![8, 6, 4, 4, 1],
+                vec![1, 3, 6, 7, 9],
+            ]),
+            2
         )
     }
 }
