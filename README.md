@@ -2,15 +2,16 @@
 
 [Advent of Code Website](https://adventofcode.com/)
 
-Scripts written to solve the 2024 edition of Advent of Code. This has become my yearly dabble into Rust. I feel I get 
-up to speed quicker each year, and it is very hard to give up the speed that rust can solve what usually tend to be 
-quite low-level challenges.
+Scripts written to solve the 2024 edition of Advent of Code. This has become my yearly dabble into Rust. I'm once
+again using [Rust](https://rustlang.org) as I still have learning to do in Rust, and I have a good setup for
+publishing my solutions that I don't have time to rebuild for another language. I did consider
+[Gleam](https://gleam.run/), maybe next year.
 
-[`main.rs`](./src/main.rs) - This is the entry point to the script, and follows a pattern of asking for a day to run, 
-then deferring to `day_X.rs` for each days' solutions. Unit tests for each day written based on the examples given in 
+[`main.rs`](./src/main.rs) - This is the entry point to the script, and follows a pattern of asking for a day to run,
+then deferring to `day_X.rs` for each days' solutions. Unit tests for each day written based on the examples given in
 the puzzle descriptions are in a `tests` submodule in that day's file.
 
-Alongside the puzzles I'm using GitHub actions / pages to automate publishing the docs, and I'm using 
+Alongside the puzzles I'm using GitHub actions / pages to automate publishing the docs, and I'm using
 [11ty](https://www.11ty.dev) to build a static site to post walk-throughs of how I developed my solutions.
 
 There is a [GitHub action](./.github/workflows/check-build.yml) that runs on a pull request -> main to check everything
@@ -34,6 +35,9 @@ This:
 
 ## Previous years:
 
+- 2023 `24/50` Rust [GitHub](https://github.com/kamioftea/advent-of-code-2023),
+  [Write Ups](https://kamioftea.github.io/advent-of-code-2023/),
+  [Puzzles](https://adventofcode.com/2023)
 - 2022 `50/50` Rust [GitHub](https://github.com/kamioftea/advent-of-code-2022),
   [Write Ups](https://kamioftea.github.io/advent-of-code-2022/),
   [Puzzles](https://adventofcode.com/2022)
