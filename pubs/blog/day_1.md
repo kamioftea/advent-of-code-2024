@@ -109,7 +109,10 @@ fn sum_similarity_scores(left: &Vec<u32>, right: &Vec<u32>) -> usize {
 #[test]
 fn can_sum_similarity_scores() {
     assert_eq!(
-        sum_similarity_scores(&vec![3, 4, 2, 1, 3, 3], &vec![4, 3, 5, 3, 9, 3]),
+        sum_similarity_scores(
+            &vec![3, 4, 2, 1, 3, 3],
+            &vec![4, 3, 5, 3, 9, 3]
+        ),
         31
     )
 }
