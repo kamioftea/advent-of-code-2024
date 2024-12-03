@@ -5,6 +5,7 @@ extern crate text_io;
 mod bootstrap_day;
 mod day_1;
 mod day_2;
+mod day_3;
 mod helpers;
 
 use bootstrap_day::bootstrap_day;
@@ -16,7 +17,11 @@ fn main() {
     io::stdout().flush().unwrap();
 
     let day: u8 = read!();
-    let days: Vec<Box<dyn Fn() -> ()>> = vec![Box::new(|| day_1::run()), Box::new(|| day_2::run())];
+    let days: Vec<Box<dyn Fn() -> ()>> = vec![
+        Box::new(|| day_1::run()),
+        Box::new(|| day_2::run()),
+        Box::new(|| day_3::run()),
+    ];
 
     let start = Instant::now();
     match days.get((day - 1) as usize) {
