@@ -1,4 +1,4 @@
-//! This is my solution for [Advent of Code - Day 3: _???_](https://adventofcode.com/2024/day/3)
+//! This is my solution for [Advent of Code - Day 3: _Mull It Over_](https://adventofcode.com/2024/day/3)
 //!
 //!
 
@@ -29,24 +29,34 @@ enum Instruction {
 }
 
 fn extract_instructions(program: &String) -> Vec<Instruction> {
-    let pattern = Regex::new(r"(mul|don't|do)\(((\d{1,3}),(\d{1,3}))?\)").unwrap();
+    let pattern = Regex::new(
+        r"(?x)        # Enable verbose mode
+(?<inst>mul|don't|do) # The instructions name
+\(                    # Open the arguments list
+  (                   # Optionally caputure two 1-3 digit arguments
+    (?<lhs>\d{1,3}),
+    (?<rhs>\d{1,3})
+  )?
+\)                    # Finally close the arguments list",
+    )
+    .unwrap();
 
     pattern
         .captures_iter(program)
         .map(|c| {
-            let instruction = c.get(1).map_or("???", |m| m.as_str());
+            let instruction = c.name("inst").map(|m| m.as_str());
             match instruction {
-                "mul" => Mul(match_number(&c, 3), match_number(&c, 4)),
-                "do" => Do,
-                "don't" => Dont,
-                inst => unreachable!("Unexpected instruction '{}'", inst),
+                Some("mul") => Mul(parse_named_group(&c, "lhs"), parse_named_group(&c, "rhs")),
+                Some("do") => Do,
+                Some("don't") => Dont,
+                inst => unreachable!("Unexpected instruction '{:?}'", inst),
             }
         })
         .collect()
 }
 
-fn match_number(c: &Captures, idx: usize) -> u32 {
-    c.get(idx).unwrap().as_str().parse().unwrap()
+fn parse_named_group(c: &Captures, name: &str) -> u32 {
+    c.name(name).unwrap().as_str().parse().unwrap()
 }
 
 fn sum_muls(instructions: &Vec<Instruction>) -> u32 {
@@ -72,7 +82,6 @@ fn sum_instructions(instructions: &Vec<Instruction>) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use crate::day_3::Instruction::*;
     use crate::day_3::*;
     
     #[test]
