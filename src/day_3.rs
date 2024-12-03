@@ -62,13 +62,10 @@ fn sum_muls(instructions: &Vec<Instruction>) -> u32 {
 fn sum_instructions(instructions: &Vec<Instruction>) -> u32 {
     instructions
         .iter()
-        .fold((0, true), |(sum, active), instruction| {
-            match (active, instruction) {
-                (true, Mul(lhs, rhs)) => (sum + lhs * rhs, true),
-                (false, Mul(_, _)) => (sum, false),
-                (_, Do) => (sum, true),
-                (_, Dont) => (sum, false),
-            }
+        .fold((0, true), |(sum, active), instruction| match instruction {
+            Mul(lhs, rhs) => (sum + if active { lhs * rhs } else { 0 }, active),
+            Do => (sum, true),
+            Dont => (sum, false),
         })
         .0
 }
