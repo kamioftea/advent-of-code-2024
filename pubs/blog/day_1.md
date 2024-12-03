@@ -4,14 +4,19 @@ tags: [ post ]
 header: 'Day 1: Historian Hysteria'
 ---
 
-Most of today was hastily copying my project setup from 2023 and making sure everything built OK. I feel I mostly
-delegated the hard parts of the day to library functions, but that's fine for day 1.
+Most of today was hastily copying my project setup from 2023 and making sure everything built OK. There is more
+general tooling around doing AoC in Rust than when I first tried. I've chosen to stick with what I know, as I'm
+comfortable with my setup.
 
-## Part 1
+Boilerplate out of the way, today's task is to transpose the lines of input into a list of numbers for each column,
+and sort each one, and then pair them up lowest to highest and sum the distance between them.
 
-Parsing the input was done by building two lists of numbers line by line. I had thought about using a BinaryHeap to
-sort them as I went, but the numbers can only be pulled out of the heap once, so I decided it didn't offer anything over
-building the list and sorting it afterwards.
+## Parsing the input
+
+The main awkwardness here was transposing the rows/lines of input into two columns. As there were only two columns it
+was less effort to manually pushed each column to its own mutable list. I thought about using BinaryHeaps as the
+collectors, which would sort them as I went. The numbers can only be pulled out of the heap once, so I decided it
+didn't offer enough benefit vs over building the lists as is, and sorting them afterwards.
 
 ```rust
 fn parse_input(input: &String) -> (Vec<u32>, Vec<u32>) {
@@ -48,15 +53,16 @@ fn can_parse_input() {
 }
 ```
 
-Once I had the lists, Itertools's `sorted` and standard library `zip` handled getting the ascending pairs of ids
+## Part 1
+
+Having obtained the lists, the solution could be done with library methods when iterating the lists. Sorting by  
+Itertools's `sorted` and, then pairing up with standard library `zip`.
 
 ```rust
 fn to_sorted_pairs(left: &Vec<u32>, right: &Vec<u32>) -> Vec<(u32, u32)> {
-    left.iter()
-        .sorted()
-        .zip(right.iter().sorted())
-        .map(|(&l, &r)| (l, r))
-        .collect()
+    let sorted_left = left.iter().cloned().sorted();
+    let sorted_right = right.iter().cloned().sorted();
+    sorted_left.zip(sorted_right).collect()
 }
 
 #[test]
@@ -68,7 +74,8 @@ fn can_generate_pairs() {
 }
 ```
 
-And then those could be reduced to the sum of their absolute distance to provide the puzzle solution
+Once zipped up, each pair could be converted to their absolute difference, and the resulting iterator summed to give
+the puzzle solution.
 
 ```rust
 fn sum_diffs(pairs: &Vec<(u32, u32)>) -> u32 {
@@ -85,8 +92,11 @@ fn can_sum_diff() {
 
 ## Part 2
 
-Itertools's `counts` implements getting the lookup of id -> number of times it appears in the list. That lookup can then
-be used to map the list of ids to scores, and sum them to get the puzzle solution.
+Part two used the same columns very differently. The left-hand column is a list of ids to loop through and calculate a
+score for each id based on how often it appears in the right-hand column.
+
+Itertools's has `counts`, which implements getting a lookup by id to the number of times it appears in the list.
+That lookup can then be used to map the list of ids to their scores, and then sum them to get the puzzle solution.
 
 ```rust
 fn sum_similarity_scores(left: &Vec<u32>, right: &Vec<u32>) -> usize {
@@ -99,8 +109,16 @@ fn sum_similarity_scores(left: &Vec<u32>, right: &Vec<u32>) -> usize {
 #[test]
 fn can_sum_similarity_scores() {
     assert_eq!(
-        sum_similarity_scores(&vec![3, 4, 2, 1, 3, 3], &vec![4, 3, 5, 3, 9, 3]),
+        sum_similarity_scores(
+            &vec![3, 4, 2, 1, 3, 3],
+            &vec![4, 3, 5, 3, 9, 3]
+        ),
         31
     )
 }
 ```
+
+## Wrap up
+
+I feel I mostly delegated the hard parts of the day to library functions, but that's fine for day 1. It will get
+harder from here, and gave me time to sort out the setup.
