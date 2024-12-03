@@ -1,6 +1,9 @@
 //! This is my solution for [Advent of Code - Day 2: _Red-Nosed Reports_](https://adventofcode.com/2024/day/2)
 //!
-//!
+//! [`parse_input`] uses [`parse_report`] to turn the input file into `Vec<Report>`. [`first_bad_level_pair`] is used
+//! by both parts to find the first pair that causes the report to be unsafe. [`analyse_reports`] solves part 1.
+//! [`report_check_with_dampener`] applies the more relaxed check for part 2, trying the permutations of dropping a
+//! level that might allow the report to pass. [`analyse_reports_with_dampener`] uses that to get the part 2 solution.
 
 use itertools::Itertools;
 use std::fs;
@@ -22,14 +25,21 @@ pub fn run() {
 
 type Report = Vec<u32>;
 
-fn parse_line(line: &str) -> Report {
+/// Parse a line of input as a list of levels
+fn parse_report(line: &str) -> Report {
     line.split(" ").flat_map(|num| num.parse()).collect()
 }
 
+/// Parse the input file into a list of reports
 fn parse_input(input: &String) -> Vec<Report> {
-    input.lines().map(parse_line).collect()
+    input.lines().map(parse_report).collect()
 }
 
+/// Find the first pair in the report that either:
+/// - Is too large a jump in levels
+/// - Is not in the same direction as previous pairs
+///
+/// Returns `None` if the report is safe, or `Some(idx)` - the first pair that makes the report unsafe.
 fn first_bad_level_pair(report: &Report) -> Option<usize> {
     let mut maybe_direction = None;
     for (idx, (&l, &r)) in report.iter().tuple_windows().enumerate() {
@@ -48,6 +58,7 @@ fn first_bad_level_pair(report: &Report) -> Option<usize> {
     None
 }
 
+/// Returns a copy of the input report without the level at the specified index
 fn without_index(report: &Report, idx: usize) -> Report {
     let mut new = report.clone();
     new.remove(idx);
@@ -55,9 +66,13 @@ fn without_index(report: &Report, idx: usize) -> Report {
     new
 }
 
+/// If the report is unsafe, it can be considered safe enough if it becomes safe when removing one level.
+///
+/// The level to remove must be one of the pair that causes the initial check to fail, or the first level in the
+/// report if that causes the first step to be in the wrong direction.
 fn report_check_with_dampener(report: &Report) -> bool {
     if let Some(pair_idx) = first_bad_level_pair(report) {
-        let lower_bound = pair_idx.checked_sub(1).unwrap_or(0);
+        let lower_bound = if pair_idx == 1 { 0 } else { pair_idx };
         (lower_bound..=(pair_idx + 1))
             .into_iter()
             .any(|level_idx| first_bad_level_pair(&without_index(report, level_idx)).is_none())
@@ -66,6 +81,7 @@ fn report_check_with_dampener(report: &Report) -> bool {
     }
 }
 
+/// Solves part 1, counting all the reports that are safe as is
 fn analyse_reports(reports: &Vec<Report>) -> usize {
     reports
         .into_iter()
@@ -73,6 +89,7 @@ fn analyse_reports(reports: &Vec<Report>) -> usize {
         .count()
 }
 
+/// Solves part 1, counting all the reports that are safe after dampening
 fn analyse_reports_with_dampener(reports: &Vec<Report>) -> usize {
     reports
         .into_iter()
@@ -90,7 +107,8 @@ mod tests {
 9 7 6 2 1
 1 3 2 4 5
 8 6 4 4 1
-1 3 6 7 9"
+1 3 6 7 9
+5 3 6 7 9"
             .to_string()
     }
 
@@ -102,6 +120,7 @@ mod tests {
             vec![1, 3, 2, 4, 5],
             vec![8, 6, 4, 4, 1],
             vec![1, 3, 6, 7, 9],
+            vec![5, 3, 6, 7, 9],
         ]
     }
 
@@ -139,6 +158,6 @@ mod tests {
 
     #[test]
     fn can_analyse_reports_with_dampener() {
-        assert_eq!(analyse_reports_with_dampener(&sample_reports()), 4)
+        assert_eq!(analyse_reports_with_dampener(&sample_reports()), 5)
     }
 }
