@@ -62,6 +62,7 @@
 				{% if solutions[day - 2] %}
 					<a href="{{ solutions[day - 2].links['Write Up'] | url}}"
 					   class="prev-link"
+					   rel="prev"
 					>
 						&lt; Day {{ day - 1 }}: {{ solutions[day - 2].title }}
 					</a>
@@ -70,6 +71,7 @@
 				{% if solutions[day] %}
 					<a href="{{ solutions[day].links['Write Up'] | url }}"
 					   class="next-link"
+					   rel="next"
 					>
 						Day {{ day + 1 }}: {{ solutions[day].title }} &gt;
 					</a>
