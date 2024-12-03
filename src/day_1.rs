@@ -25,7 +25,7 @@ pub fn run() {
     );
 }
 
-/// The input is two columns of numbers separated by three spaces, e.g.
+/// Build up lists of ids from the puzzle input. The input is two columns of numbers separated by three spaces, e.g.
 ///
 /// ```text
 /// 3   4
@@ -52,11 +52,9 @@ fn parse_input(input: &String) -> (Vec<u32>, Vec<u32>) {
 
 /// The first part of the solution to part 1. Pair the lowest integers in each list, then second lowest, and so on...
 fn to_sorted_pairs(left: &Vec<u32>, right: &Vec<u32>) -> Vec<(u32, u32)> {
-    left.iter()
-        .sorted()
-        .zip(right.iter().sorted())
-        .map(|(&l, &r)| (l, r))
-        .collect()
+    let sorted_left = left.iter().cloned().sorted();
+    let sorted_right = right.iter().cloned().sorted();
+    sorted_left.zip(sorted_right).collect()
 }
 
 /// The second part of the solution to part 1, given a sorted list of pairs, sum the distance between them
@@ -64,7 +62,7 @@ fn sum_diffs(pairs: &Vec<(u32, u32)>) -> u32 {
     pairs.iter().map(|&(l, r)| l.abs_diff(r)).sum()
 }
 
-/// The solution to part 1. The similarity score for a number in the left-hand column is that number multiplied by the
+/// The solution to part 2. The similarity score for a number in the left-hand column is that number multiplied by the
 /// number of times it appears in the right-hand column.
 fn sum_similarity_scores(left: &Vec<u32>, right: &Vec<u32>) -> usize {
     let lookup = right.iter().counts();
