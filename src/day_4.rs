@@ -14,10 +14,13 @@ pub fn run() {
     let contents = fs::read_to_string("res/day-4-input.txt").expect("Failed to read file");
 
     let wordsearch = Wordsearch::from_str(&contents).unwrap();
+
     println!(
         "There are {} XMASes",
         wordsearch.word_count(&"XMAS".to_string())
-    )
+    );
+
+    println!("There are {} X-MASes", wordsearch.count_x_masses());
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -97,6 +100,13 @@ impl Wordsearch {
             && (top_left == Some("MAS".to_string()) || top_left == Some("SAM".to_string()))
             && (top_right == Some("MAS".to_string()) || top_right == Some("SAM".to_string()))
     }
+
+    fn count_x_masses(&self) -> usize {
+        self.find_all(&'A')
+            .iter()
+            .filter(|coord| self.is_x_mas(coord))
+            .count()
+    }
 }
 
 impl FromStr for Wordsearch {
@@ -166,7 +176,11 @@ XMAS.S
     fn can_count_xmasses() {
         assert_eq!(example_wordsearch().word_count(&"XMAS".to_string()), 4);
 
-        let bigger_example = Wordsearch::from_str(
+        assert_eq!(bigger_example().word_count(&"XMAS".to_string()), 18)
+    }
+
+    fn bigger_example() -> Wordsearch {
+        Wordsearch::from_str(
             "MMMSXXMASM
 MSAMXMSMSA
 AMXSXMAAMM
@@ -178,9 +192,7 @@ SAXAMASAAA
 MAMMMXMMMM
 MXMXAXMASX",
         )
-        .unwrap();
-
-        assert_eq!(bigger_example.word_count(&"XMAS".to_string()), 18)
+        .unwrap()
     }
 
     #[test]
@@ -190,5 +202,8 @@ MXMXAXMASX",
     }
 
     #[test]
-    fn can_count_x_masses() {}
+    fn can_count_x_masses() {
+        assert_eq!(example_wordsearch().count_x_masses(), 1);
+        assert_eq!(bigger_example().count_x_masses(), 9);
+    }
 }
