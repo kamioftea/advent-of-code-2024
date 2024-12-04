@@ -1,6 +1,8 @@
 //! This is my solution for [Advent of Code - Day 3: _Mull It Over_](https://adventofcode.com/2024/day/3)
 //!
-//!
+//! Most of today's heavy lifting is done by the parser [`extract_instructions`]. Part one is solved by [`sum_muls`]
+//! which cherry-picks all the [`Mul`] instructions. [`sum_instructions`] extends that by respecting [`Do`] and
+//! [`Dont`] instructions.
 
 use regex::{Captures, Regex};
 use std::fs;
@@ -21,6 +23,7 @@ pub fn run() {
     );
 }
 
+/// The possible instructions that can be extracted from the input string
 #[derive(Debug, Eq, PartialEq)]
 enum Instruction {
     Mul(u32, u32),
@@ -28,6 +31,12 @@ enum Instruction {
     Dont,
 }
 
+/// Helper for parsing a specified Regex capturing group as a number
+fn parse_named_group(c: &Captures, name: &str) -> u32 {
+    c.name(name).unwrap().as_str().parse().unwrap()
+}
+
+/// Uses a [`Regex`] to extract specific [`Instruction`]s from the input string.
 fn extract_instructions(program: &String) -> Vec<Instruction> {
     let pattern = Regex::new(
         r"(?x)        # Enable verbose mode
@@ -55,10 +64,7 @@ fn extract_instructions(program: &String) -> Vec<Instruction> {
         .collect()
 }
 
-fn parse_named_group(c: &Captures, name: &str) -> u32 {
-    c.name(name).unwrap().as_str().parse().unwrap()
-}
-
+/// Solution to part 1. Sums the results of applying all [`Mul`] instructions
 fn sum_muls(instructions: &Vec<Instruction>) -> u32 {
     instructions
         .iter()
@@ -69,6 +75,8 @@ fn sum_muls(instructions: &Vec<Instruction>) -> u32 {
         .sum()
 }
 
+/// Solution to part 1. Sums the results of applying only [`Mul`] instructions that are not disabled by [`Dont`]
+/// instructions.
 fn sum_instructions(instructions: &Vec<Instruction>) -> u32 {
     instructions
         .iter()
