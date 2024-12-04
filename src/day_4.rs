@@ -63,13 +63,19 @@ impl Wordsearch {
         ];
         deltas
             .iter()
-            .map(|delta| {
-                (0..length)
-                    .flat_map(|magnitude| apply_delta(start, delta, magnitude))
-                    .flat_map(|(x, y)| self.cells.get(y).and_then(|row| row.get(x)))
-                    .join("")
-            })
+            .map(|delta| self.get_word(start, length, delta))
             .collect()
+    }
+
+    fn get_word(&self, start: &CellCoords, length: usize, delta: &(isize, isize)) -> String {
+        (0..length)
+            .flat_map(|magnitude| apply_delta(start, delta, magnitude))
+            .flat_map(|coord| self.char_at(&coord))
+            .join("")
+    }
+
+    fn char_at(&self, &(x, y): &CellCoords) -> Option<&char> {
+        self.cells.get(y).and_then(|row| row.get(x))
     }
 
     fn word_count(&self, search: &String) -> usize {
@@ -79,6 +85,17 @@ impl Wordsearch {
             .flat_map(|coord| self.words_from(coord, search.len()))
             .filter(|word| word == search)
             .count()
+    }
+
+    fn is_x_mas(&self, coord: &CellCoords) -> bool {
+        let top_left =
+            apply_delta(coord, &(-1, -1), 1).map(|start| self.get_word(&start, 3, &(1, 1)));
+        let top_right =
+            apply_delta(coord, &(1, -1), 1).map(|start| self.get_word(&start, 3, &(-1, 1)));
+
+        self.char_at(coord) == Some(&'A')
+            && (top_left == Some("MAS".to_string()) || top_left == Some("SAM".to_string()))
+            && (top_right == Some("MAS".to_string()) || top_right == Some("SAM".to_string()))
     }
 }
 
@@ -165,4 +182,13 @@ MXMXAXMASX",
 
         assert_eq!(bigger_example.word_count(&"XMAS".to_string()), 18)
     }
+
+    #[test]
+    fn can_find_x_masses() {
+        assert_eq!(example_wordsearch().is_x_mas(&(1, 1)), false);
+        assert_eq!(example_wordsearch().is_x_mas(&(4, 2)), true);
+    }
+
+    #[test]
+    fn can_count_x_masses() {}
 }
