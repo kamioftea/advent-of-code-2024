@@ -8,7 +8,7 @@ Today was pulling things that look like a multiplication instruction out of a la
 to me reaching for regular expressions. I try to avoid these where `trim`s, `split`s,  `replace`s, etc. can be used
 as they're quite inefficient in comparison, but in this case they're a good fit.
 
-## Parse Input
+## Parse the input
 
 The regex should match `mul` followed by two positive numbers in braces, without any other characters (including
 spaces). The numbers have to be 1 to 3 digits. This translates directly into a regex, which can then provide an
@@ -41,7 +41,7 @@ fn can_extract_instructions() {
 }
 ```
 
-## Part 1
+## Part 1 - Multiply all the things
 
 The parsing has done most of the work for the puzzle, all that is left to do is apply the multiplications and sum
 the results.
@@ -60,7 +60,7 @@ fn can_sum_instructions() {
 }
 ```
 
-## Part 2
+## Part 2 - Do this, don't do that...
 
 The twist is that some of the rest of the nonsense input is `do()` and `don't()` instructions. `don't` should
 cause the `mul` instructions to be ignored until a `do()` is seen. These don't nest so multiple `don't()` will still

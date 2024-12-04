@@ -53,10 +53,10 @@ fn can_parse_input() {
 }
 ```
 
-## Part 1
+## Part 1 - Find the total distance
 
-Having obtained the lists, the solution could be done with library methods when iterating the lists. Sorting by  
-Itertools's `sorted` and, then pairing up with standard library `zip`.
+Having obtained the lists, I have to sort each list, then pair lowest to lowest, and so on. There are existing
+library methods that can do this: Sorting by Itertools's `sorted` and, then pairing up with standard library `zip`.
 
 ```rust
 fn to_sorted_pairs(left: &Vec<u32>, right: &Vec<u32>) -> Vec<(u32, u32)> {
@@ -90,10 +90,10 @@ fn can_sum_diff() {
 }
 ```
 
-## Part 2
+## Part 2 - Find the total "similarity score"
 
 Part two used the same columns very differently. The left-hand column is a list of ids to loop through and calculate a
-score for each id based on how often it appears in the right-hand column.
+similarity score for each id, which is the id multiplied often it appears in the right-hand column.
 
 Itertools's has `counts`, which implements getting a lookup by id to the number of times it appears in the list.
 That lookup can then be used to map the list of ids to their scores, and then sum them to get the puzzle solution.

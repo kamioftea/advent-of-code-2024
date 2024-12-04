@@ -50,7 +50,7 @@ fn can_parse_input() {
 }
 ```
 
-## Part 1
+## Part 1 - Is it safe?
 
 Itertools provides `Itertools::tuple_windows` that returns an iterator over each consecutive tuple of numbers, and
 can determine from the pattern matching the size of the expected tuples. Determining if the numbers are not
@@ -104,7 +104,7 @@ fn can_analyse_reports() {
 }
 ```
 
-## Part 2
+## Part 2 - Is it safe, now?
 
 Today's twist is that the reactor is more tolerant than first described. A report can be safe enough if only one of
 the reported levels is unsafe, and removing that level makes the remaining report safe. Thinking about this, I can
