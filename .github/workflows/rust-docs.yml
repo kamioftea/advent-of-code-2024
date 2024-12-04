@@ -27,7 +27,8 @@ jobs:
 
       - name: Build Docs
         run: |
-          cargo doc
+          rm -rf ./target/doc
+          cargo doc --all --no-deps --document-private-items --all-features
 
       - name: Build Blog
         env:

@@ -1,6 +1,9 @@
 use error_chain::error_chain;
+use itertools::Itertools;
+use regex::Regex;
 use reqwest::cookie::Jar;
 use reqwest::Url;
+use scraper::{Html, Selector};
 use std::fs;
 use std::fs::File;
 use std::io::copy;
@@ -28,9 +31,8 @@ pub fn bootstrap_day(day: u8) -> Result<()> {
         .cookie_provider(Arc::new(jar))
         .build()?;
 
-    let target = format!("https://www.adventofcode.com/2024/day/{}/input", day);
-
-    let input_file_contents = client.get(target).send()?.text()?;
+    let input_target = format!("https://www.adventofcode.com/2024/day/{}/input", day);
+    let input_file_contents = client.get(input_target).send()?.text()?;
 
     let output_filename = format!("res/day-{}-input.txt", day);
     let mut output_file = File::create(output_filename.clone())?;
@@ -38,9 +40,31 @@ pub fn bootstrap_day(day: u8) -> Result<()> {
 
     println!("Puzzle input saved to {}", output_filename);
 
+    let puzzle_target = format!("https://www.adventofcode.com/2024/day/{}", day);
+    let input_file_contents = client.get(puzzle_target).send()?.text()?;
+
+    let html = Html::parse_document(input_file_contents.as_str());
+    let selector = Selector::parse("article.day-desc > h2").unwrap();
+    let pattern = Regex::new(r"^--- Day \d+: (?<title>.*) ---$").unwrap();
+    let title = html
+        .select(&selector)
+        .next()
+        .map(|h2| h2.text().join(""))
+        .and_then(|text| {
+            pattern
+                .captures_iter(text.as_str())
+                .exactly_one()
+                .ok()
+                .and_then(|caps| caps.name("title").map(|m| m.as_str().to_string()))
+        })
+        .unwrap_or("???".to_string())
+        .to_string();
+
+    println!("Title: {title}");
+
     let rust_filename = format!("src/day_{}.rs", day);
     let rust_contents = format!("\
-//! This is my solution for [Advent of Code - Day {day}: _???_](https://adventofcode.com/2024/day/{day})
+//! This is my solution for [Advent of Code - Day {day}: _{title}_](https://adventofcode.com/2024/day/{day})
 //!
 //!
 
@@ -72,7 +96,7 @@ mod tests {{
 ---
 day: {day}
 tags: [post]
-header: 'Day {day}: ???'
+header: 'Day {day}: {title}'
 ---
 ",
         day = day

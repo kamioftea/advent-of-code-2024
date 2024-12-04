@@ -1,7 +1,8 @@
 #[cfg(test)]
 pub(crate) mod test {
     use std::fmt::Debug;
-
+    
+    #[allow(dead_code)]
     pub(crate) fn assert_contains_in_any_order<T>(
         actual: impl IntoIterator<Item = T>,
         expected: impl IntoIterator<Item = T>,
