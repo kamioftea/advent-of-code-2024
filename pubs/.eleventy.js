@@ -4,6 +4,7 @@ import inclusiveLangPlugin from '@11ty/eleventy-plugin-inclusive-language';
 
 import markdown from './_lib/markdown-it.js';
 
+// noinspection JSUnusedGlobalSymbols
 export default function (eleventyConfig) {
     eleventyConfig.addPlugin(EleventyRenderPlugin)
     eleventyConfig.addPlugin(inclusiveLangPlugin);
@@ -15,11 +16,10 @@ export default function (eleventyConfig) {
     eleventyConfig.addGlobalData('layout', 'layout.njk')
 
     eleventyConfig.addPassthroughCopy('assets')
-    eleventyConfig.addPassthroughCopy({'node_modules/highlight.js/styles/a11y-dark.css': 'assets/styles/a11y-dark.css'})
 
     return {
-        passthroughFileCopy: true,
+        passthroughFileCopy:    true,
         markdownTemplateEngine: 'njk',
-        pathPrefix: process.env.PATH_PREFIX ?? ''
+        pathPrefix:             process.env.PATH_PREFIX ?? ''
     }
 }
