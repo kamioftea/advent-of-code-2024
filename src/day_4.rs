@@ -12,6 +12,12 @@ use std::str::FromStr;
 /// - It is expected this will be called by [`super::main()`] when the user elects to run day 4.
 pub fn run() {
     let contents = fs::read_to_string("res/day-4-input.txt").expect("Failed to read file");
+
+    let wordsearch = Wordsearch::from_str(&contents).unwrap();
+    println!(
+        "There are {} XMASes",
+        wordsearch.word_count(&"XMAS".to_string())
+    )
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -93,7 +99,7 @@ mod tests {
     #[test]
     fn can_parse_input() {
         let input = "..X...
-.SAMX.
+.SAMXM
 .A..A.
 XMAS.S
 .X....";
@@ -104,7 +110,7 @@ XMAS.S
     fn example_wordsearch() -> Wordsearch {
         let cells = vec![
             vec!['.', '.', 'X', '.', '.', '.'],
-            vec!['.', 'S', 'A', 'M', 'X', '.'],
+            vec!['.', 'S', 'A', 'M', 'X', 'M'],
             vec!['.', 'A', '.', '.', 'A', '.'],
             vec!['X', 'M', 'A', 'S', '.', 'S'],
             vec!['.', 'X', '.', '.', '.', '.'],
