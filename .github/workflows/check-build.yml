@@ -42,7 +42,7 @@ jobs:
       - name: Test Rust Docs
         run: |
           export RUSTDOCFLAGS="-Dwarnings"
-          cargo doc
+          cargo doc --all --no-deps --document-private-items --all-features
 
       - name: Test Blog
         run: |
