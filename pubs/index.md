@@ -24,11 +24,14 @@ I have copied over the repo tooling from last year. This has the following featu
 - A second workflow to publish both documentation and write-ups to GitHub Pages when a PR is merged into main.
 
 I have developed a pattern for solving the daily puzzles, which I will likely follow again this year. Usually
-the puzzle statement is broken into stages with examples. Those examples make for good tests, so I'll set those up.
-Idiomatically, Rust tests are in a test mod in the same file as the code its testing, so I can iterate through the
-steps within one file for the day. Once the tests are passing, running the same against the puzzle input is
+the puzzle statement is broken into stages with examples. Those examples make for good tests for doing Test Driven
+Development. Idiomatically, Rust tests are in a test mod in the same file as the code its testing, so I can iterate
+through the steps within one file for the day. Once the tests are passing, running the same against the puzzle input is
 hopefully trivial. In cases where the puzzle as described hits performance issues, I have a test harness ready,
 which allows refactoring to a more efficient implementation.
+
+I will usually step through the stages of solving the puzzle in the write-up article, posting the implementing
+function and associated test.
 
 ## My Solutions
 
