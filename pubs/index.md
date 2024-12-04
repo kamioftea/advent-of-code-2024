@@ -10,15 +10,28 @@ description: |
 until Christmas Day. The challenges are language agnostic, providing the input as a text file, and expecting a number or
 a string as the result of each part.
 
-I'm sticking with Rust as I enjoy using it for these types of puzzles, and it's not something I get to use day-to-day.
-I also think I still have a lot to learn about using Rust. I'm starting from a skeleton version of the repository I
-set up last year, and will look at iterating on it as the challenge continues. 
+I have done the last few years in [Rust](https://rustlang.org), and will be continuing to use it this year. This is
+mostly a convenience. I have a setup that allows me to solve the puzzles in a TDD style, and publish the code and a
+write-up quickly. Whilst I'm more comfortable using Rust for these puzzles, I still feel I have a lot of learning to
+do to write Rust well and idiomatically. I considered using this year to learn [Gleam](https://gleam.run/), but I
+haven't had the time to set up tooling, so maybe next year?
 
-This has the following features:
-- [A documentation site](./advent_of_code_2024/) built using the `cargo doc` tool bundled with Rust.  
+I have copied over the repo tooling from last year. This has the following features:
+
+- [A documentation site](./advent_of_code_2024/) built using the `cargo doc` tool bundled with Rust.
 - This static site, built with [11ty](https://www.11ty.dev) where I can write up how I've tackled each puzzle.
-- A GitHub Actions workflow test PRs compile and the static site builds .
+- A GitHub Actions workflow test PRs compile and the static site builds.
 - A second workflow to publish both documentation and write-ups to GitHub Pages when a PR is merged into main.
+
+I have developed a pattern for solving the daily puzzles, which I will likely follow again this year. Usually
+the puzzle statement is broken into stages with examples. Those examples make for good tests for doing Test Driven
+Development. Idiomatically, Rust tests are in a test mod in the same file as the code its testing, so I can iterate
+through the steps within one file for the day. Once the tests are passing, running the same against the puzzle input is
+hopefully trivial. In cases where the puzzle as described hits performance issues, I have a test harness ready,
+which allows refactoring to a more efficient implementation.
+
+I will usually step through the stages of solving the puzzle in the write-up article, posting the implementing
+function and associated test.
 
 ## My Solutions
 
