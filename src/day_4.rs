@@ -1,6 +1,12 @@
 //! This is my solution for [Advent of Code - Day 4: _Ceres Search_](https://adventofcode.com/2024/day/4)
 //!
+//! [`Wordsearch`] and its methods solve te solution today. [`Wordsearch::from_str`] handles parsing the puzzle input.
 //!
+//! [`Wordsearch::word_count`] solves part 1, using [`apply_delta`], [`Wordsearch::char_at`], [`Wordsearch::get_word`],
+//! and [`Wordsearch::words_from`], and [`Wordsearch::find_all`].
+//!
+//! [`Wordsearch::count_x_masses`] solves part 2, using [`Wordsearch::is_x_mas`], which in turn reuses some of the
+//! part 1 helpers
 
 use itertools::Itertools;
 use std::fs;
@@ -23,13 +29,17 @@ pub fn run() {
     println!("There are {} X-MASes", wordsearch.count_x_masses());
 }
 
+/// A wordsearch grid
 #[derive(Eq, PartialEq, Debug)]
 struct Wordsearch {
     cells: Vec<Vec<char>>,
 }
 
+/// A coordinate to a cell in [`Wordsearch`]
 type CellCoords = (usize, usize);
 
+/// Get `Some(coordinate)` that is `magnitude` distance along a line with a given `delta`. Returning None if applying
+/// `delta * magnitude` is out of bounds.
 fn apply_delta(
     (x, y): &CellCoords,
     (dx, dy): &(isize, isize),
@@ -40,6 +50,7 @@ fn apply_delta(
 }
 
 impl Wordsearch {
+    /// Return a list of all the cell coordinates that contain the provided `letter`
     fn find_all(&self, letter: &char) -> Vec<CellCoords> {
         let mut coords = Vec::new();
         for (y, row) in self.cells.iter().enumerate() {
@@ -53,6 +64,8 @@ impl Wordsearch {
         coords
     }
 
+    /// Find all the words in the 8 possible axes from a given start, of the given `length`. These will be cropped if
+    /// any overflow the edges of the [`Wordsearch`].
     fn words_from(&self, start: &CellCoords, length: usize) -> Vec<String> {
         let deltas = vec![
             (-1, 0),
@@ -70,6 +83,8 @@ impl Wordsearch {
             .collect()
     }
 
+    /// Return the letters along a given delta from a starting coordinate pair, of the given `length`. It will be
+    /// cropped if it overflows the wordsearch.
     fn get_word(&self, start: &CellCoords, length: usize, delta: &(isize, isize)) -> String {
         (0..length)
             .flat_map(|magnitude| apply_delta(start, delta, magnitude))
@@ -77,10 +92,12 @@ impl Wordsearch {
             .join("")
     }
 
+    /// If the coordinate pair given is within the grid return `Some(letter)` otherwise None.
     fn char_at(&self, &(x, y): &CellCoords) -> Option<&char> {
         self.cells.get(y).and_then(|row| row.get(x))
     }
 
+    /// Solves part 1: Find all instances of the `search` word in the wordsearch
     fn word_count(&self, search: &String) -> usize {
         let start = search.chars().next().expect("Word must not be empty");
         self.find_all(&start)
@@ -90,6 +107,15 @@ impl Wordsearch {
             .count()
     }
 
+    /// For a given center point, return true if it is the centre of an `X-MAS`.
+    ///
+    /// Valid matches are:
+    ///
+    /// ```text
+    /// M.M  M.S  S.M  S.S
+    /// .A.  .A.  .A.  .A.
+    /// S.S  M.S  S.M  M.M
+    /// ```
     fn is_x_mas(&self, coord: &CellCoords) -> bool {
         let top_left =
             apply_delta(coord, &(-1, -1), 1).map(|start| self.get_word(&start, 3, &(1, 1)));
@@ -101,6 +127,7 @@ impl Wordsearch {
             && (top_right == Some("MAS".to_string()) || top_right == Some("SAM".to_string()))
     }
 
+    /// Solves part 2: Find all the A's in the grid and count those that are the center of an `X-MAS`
     fn count_x_masses(&self) -> usize {
         self.find_all(&'A')
             .iter()
@@ -171,11 +198,9 @@ XMAS.S
         )
     }
 
-    //noinspection SpellCheckingInspection
     #[test]
     fn can_count_xmasses() {
         assert_eq!(example_wordsearch().word_count(&"XMAS".to_string()), 4);
-
         assert_eq!(bigger_example().word_count(&"XMAS".to_string()), 18)
     }
 
@@ -196,7 +221,7 @@ MXMXAXMASX",
     }
 
     #[test]
-    fn can_find_x_masses() {
+    fn can_check_for_an_x_mas() {
         assert_eq!(example_wordsearch().is_x_mas(&(1, 1)), false);
         assert_eq!(example_wordsearch().is_x_mas(&(4, 2)), true);
     }
