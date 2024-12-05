@@ -1,6 +1,13 @@
 //! This is my solution for [Advent of Code - Day 5: _Print Queue_](https://adventofcode.com/2024/day/5)
 //!
+//! [`parse_input`] splits the input into the two sections, delegating these to [`parse_rules`] and [`parse_updates`]
+//! respectively.
 //!
+//! Part 1 is solved by [`sum_valid_middle_pages`], with the validation being done by [`validate_update`], and
+//! [`get_middle`] split out for ease of reuse.
+//!
+//! Part 2 is solved by [`sort_and_sum_invalid_middle_pages`], with [`sort_pages`] doing the extra work, everything
+//! else is reused from part 1.
 
 use itertools::Itertools;
 use std::cmp::Ordering;
@@ -27,9 +34,12 @@ pub fn run() {
     );
 }
 
+/// Rules represented as a lookup from page number to the set of pages that must come after
 type Rules = HashMap<u32, HashSet<u32>>;
+/// Updates as a list of page numbers
 type Update = Vec<u32>;
 
+/// Build the Rules lookup by adding each rule in turn.
 fn parse_rules(input: &str) -> Rules {
     let mut rules: Rules = HashMap::new();
     input
@@ -45,6 +55,7 @@ fn parse_rules(input: &str) -> Rules {
     rules
 }
 
+/// Parse the lines of input into lists of page numbers
 fn parse_updates(input: &str) -> Vec<Update> {
     input
         .lines()
@@ -52,12 +63,15 @@ fn parse_updates(input: &str) -> Vec<Update> {
         .collect()
 }
 
+/// Split the list into two sections and parse each
 fn parse_input(input: &String) -> (Rules, Vec<Update>) {
     let (rule_input, updates_input) = input.split_once("\n\n").unwrap();
 
     (parse_rules(rule_input), parse_updates(updates_input))
 }
 
+/// For a given [`Update`], check for each page that a page already in the update list does not need to come after
+/// the current page.
 fn validate_update(update: &Update, rules: &Rules) -> bool {
     let mut seen = HashSet::new();
     let empty = HashSet::new();
@@ -73,11 +87,13 @@ fn validate_update(update: &Update, rules: &Rules) -> bool {
     true
 }
 
+/// Utility to get the middle page of an update.
 fn get_middle(update: &Update) -> u32 {
     let middle = (update.len() - 1) / 2;
     update.get(middle).unwrap().clone()
 }
 
+/// Solution to part 1, find the valid update lists and sum their middle page.
 fn sum_valid_middle_pages(updates: &Vec<Update>, rules: &Rules) -> u32 {
     updates
         .iter()
@@ -86,6 +102,8 @@ fn sum_valid_middle_pages(updates: &Vec<Update>, rules: &Rules) -> u32 {
         .sum()
 }
 
+/// Assuming all pairs of pages have rules that specify an ordering for that pair, use that to provide a sorting
+/// function for [`Itertools::sorted_by`].
 fn sort_pages(update: &Update, rules: &Rules) -> Update {
     let empty = HashSet::new();
 
@@ -107,6 +125,8 @@ fn sort_pages(update: &Update, rules: &Rules) -> Update {
         .collect()
 }
 
+/// Solution to part 2 - similar to [`sum_valid_middle_pages`], but finds invalid pages and sorts them before
+/// extracting thr middle and summing.
 fn sort_and_sum_invalid_middle_pages(updates: &Vec<Update>, rules: &Rules) -> u32 {
     updates
         .iter()
