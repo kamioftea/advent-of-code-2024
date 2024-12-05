@@ -24,6 +24,7 @@ fn main() {
         Box::new(|| day_2::run()),
         Box::new(|| day_3::run()),
         Box::new(|| day_4::run()),
+        Box::new(|| day_5::run()),
     ];
 
     let start = Instant::now();
