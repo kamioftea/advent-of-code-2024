@@ -7,6 +7,7 @@ mod day_1;
 mod day_2;
 mod day_3;
 mod day_4;
+mod day_5;
 mod helpers;
 
 use bootstrap_day::bootstrap_day;
@@ -23,6 +24,7 @@ fn main() {
         Box::new(|| day_2::run()),
         Box::new(|| day_3::run()),
         Box::new(|| day_4::run()),
+        Box::new(|| day_5::run()),
     ];
 
     let start = Instant::now();
