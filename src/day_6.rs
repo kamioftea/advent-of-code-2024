@@ -17,10 +17,15 @@ pub fn run() {
     println!(
         "The guard visits {} positions",
         count_guard_positions(&guard, &lab)
+    );
+
+    println!(
+        "There are {} positions where obstructions will cause a loop",
+        count_loops(&guard, &lab)
     )
 }
 
-#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+#[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 enum Direction {
     UP,
     RIGHT,
@@ -39,14 +44,23 @@ impl Direction {
     }
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 struct Lab {
     width: usize,
     height: usize,
     obstructions: HashSet<(usize, usize)>,
 }
 
-#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+impl Lab {
+    fn with_obstruction(&self, position: (usize, usize)) -> Lab {
+        let mut new_lab = self.clone();
+        new_lab.obstructions.insert(position);
+
+        new_lab
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 struct Guard {
     row: usize,
     column: usize,
@@ -146,6 +160,27 @@ fn count_guard_positions(guard: &Guard, lab: &Lab) -> usize {
     visited.len()
 }
 
+fn will_loop(guard: &Guard, lab: &Lab) -> bool {
+    let path = &mut HashSet::new();
+    let mut guard = Some(guard.clone());
+    while let Some(current_guard) = guard {
+        if path.contains(&current_guard) {
+            return true;
+        }
+        path.insert(current_guard);
+        guard = current_guard.take_step(lab);
+    }
+
+    false
+}
+
+fn count_loops(guard: &Guard, lab: &Lab) -> usize {
+    (0..lab.height)
+        .flat_map(move |r| (0..lab.width).map(move |c| (r, c)))
+        .filter(|&position| will_loop(&guard, &lab.with_obstruction(position)))
+        .count()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::day_6::*;
@@ -219,5 +254,27 @@ mod tests {
             count_guard_positions(&Guard::new(6, 4, UP), &example_lab()),
             41
         );
+    }
+
+    #[test]
+    fn can_check_for_loop() {
+        let lab = example_lab();
+        let guard = Guard::new(6, 4, UP);
+
+        assert_eq!(will_loop(&guard, &lab), false);
+
+        let looping_positions = vec![(6, 3), (7, 6), (7, 7), (8, 1), (8, 3), (9, 7)];
+
+        for position in looping_positions {
+            assert!(
+                will_loop(&guard, &lab.with_obstruction(position)),
+                "Should loop with an obstruction at {position:?}"
+            )
+        }
+    }
+
+    #[test]
+    fn can_count_obstructions() {
+        assert_eq!(count_loops(&Guard::new(6, 4, UP), &example_lab()), 6)
     }
 }
