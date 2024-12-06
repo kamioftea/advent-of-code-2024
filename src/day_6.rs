@@ -44,43 +44,42 @@ impl Direction {
     }
 }
 
+type Position = (usize, usize);
+
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct Lab {
     width: usize,
     height: usize,
-    obstructions: HashSet<(usize, usize)>,
+    obstructions: HashSet<Position>,
 }
 
 impl Lab {
-    fn with_obstruction(&mut self, position: (usize, usize)) -> bool {
+    fn with_obstruction(&mut self, position: Position) -> bool {
         self.obstructions.insert(position)
     }
 
-    fn without_obstruction(&mut self, position: (usize, usize)) -> bool {
+    fn without_obstruction(&mut self, position: Position) -> bool {
         self.obstructions.remove(&position)
     }
 }
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 struct Guard {
-    row: usize,
-    column: usize,
+    position: Position,
     direction: Direction,
 }
 
 impl Guard {
-    fn new(row: usize, column: usize, direction: Direction) -> Guard {
+    fn new(position: Position, direction: Direction) -> Guard {
         Guard {
-            row,
-            column,
+            position,
             direction,
         }
     }
 
-    fn with_position(&self, row: usize, column: usize) -> Guard {
+    fn with_position(&self, position: Position) -> Guard {
         Guard {
-            row,
-            column,
+            position,
             direction: self.direction,
         }
     }
@@ -91,26 +90,24 @@ impl Guard {
 
     fn take_step(&self, lab: &Lab) -> Option<Guard> {
         match self.next_position(lab) {
-            Some((row, column)) if lab.obstructions.contains(&(row, column)) => {
+            Some(position) if lab.obstructions.contains(&position) => {
                 Some(self.with_direction(self.direction.turn()))
             }
-            Some((row, column)) => Some(self.with_position(row, column)),
+            Some(position) => Some(self.with_position(position)),
             None => None,
         }
     }
 
     fn next_position(&self, lab: &Lab) -> Option<(usize, usize)> {
+        let (row, column) = self.position;
         match self.direction {
-            UP => self.row.checked_add_signed(-1).zip(Some(self.column)),
-            RIGHT => {
-                Some(self.row).zip(self.column.checked_add_signed(1).filter(|&c| c < lab.width))
-            }
-            DOWN => self
-                .row
+            UP => row.checked_add_signed(-1).zip(Some(column)),
+            RIGHT => Some(row).zip(column.checked_add_signed(1).filter(|&c| c < lab.width)),
+            DOWN => row
                 .checked_add_signed(1)
                 .filter(|&r| r < lab.height)
-                .zip(Some(self.column)),
-            LEFT => Some(self.row).zip(self.column.checked_add_signed(-1)),
+                .zip(Some(column)),
+            LEFT => Some(row).zip(column.checked_add_signed(-1)),
         }
     }
 }
@@ -129,7 +126,7 @@ fn parse_input(input: &String) -> (Lab, Guard) {
                     obstructions.insert((row, column));
                 }
                 '^' => {
-                    guard = Some(Guard::new(row, column, UP));
+                    guard = Some(Guard::new((row, column), UP));
                 }
                 _ => (),
             }
@@ -150,7 +147,7 @@ fn count_guard_positions(guard: &Guard, lab: &Lab) -> usize {
     let visited = &mut HashSet::new();
     let mut guard = Some(guard.clone());
     while let Some(current_guard) = guard {
-        visited.insert((current_guard.row, current_guard.column));
+        visited.insert(current_guard.position);
         guard = current_guard.take_step(lab);
     }
 
@@ -188,12 +185,12 @@ fn count_loops(guard: &Guard, lab: &Lab) -> usize {
     let mut tried = HashSet::new();
 
     for guard_position in get_path(guard, &lab) {
-        if let Some((row, column)) = guard_position.next_position(&lab) {
-            if tried.insert((row, column)) && lab.with_obstruction((row, column)) {
+        if let Some(position) = guard_position.next_position(&lab) {
+            if tried.insert(position) && lab.with_obstruction(position) {
                 if will_loop(&guard_position, &lab) {
                     counter += 1;
                 }
-                lab.without_obstruction((row, column));
+                lab.without_obstruction(position);
             }
         }
     }
@@ -241,7 +238,7 @@ mod tests {
         let (lab, guard) = parse_input(&input);
 
         assert_eq!(lab, example_lab());
-        assert_eq!(guard, Guard::new(6, 4, UP));
+        assert_eq!(guard, Guard::new((6, 4), UP));
     }
 
     #[test]
@@ -249,18 +246,18 @@ mod tests {
         let lab = example_lab();
 
         let examples = vec![
-            (Guard::new(6, 4, UP), Some(Guard::new(5, 4, UP))),
-            (Guard::new(1, 4, UP), Some(Guard::new(1, 4, RIGHT))),
-            (Guard::new(1, 4, RIGHT), Some(Guard::new(1, 5, RIGHT))),
-            (Guard::new(1, 8, RIGHT), Some(Guard::new(1, 8, DOWN))),
-            (Guard::new(1, 8, DOWN), Some(Guard::new(2, 8, DOWN))),
-            (Guard::new(6, 8, DOWN), Some(Guard::new(6, 8, LEFT))),
-            (Guard::new(6, 8, LEFT), Some(Guard::new(6, 7, LEFT))),
-            (Guard::new(6, 2, LEFT), Some(Guard::new(6, 2, UP))),
-            (Guard::new(0, 0, UP), None),
-            (Guard::new(9, 9, RIGHT), None),
-            (Guard::new(9, 9, DOWN), None),
-            (Guard::new(0, 0, LEFT), None),
+            (Guard::new((6, 4), UP), Some(Guard::new((5, 4), UP))),
+            (Guard::new((1, 4), UP), Some(Guard::new((1, 4), RIGHT))),
+            (Guard::new((1, 4), RIGHT), Some(Guard::new((1, 5), RIGHT))),
+            (Guard::new((1, 8), RIGHT), Some(Guard::new((1, 8), DOWN))),
+            (Guard::new((1, 8), DOWN), Some(Guard::new((2, 8), DOWN))),
+            (Guard::new((6, 8), DOWN), Some(Guard::new((6, 8), LEFT))),
+            (Guard::new((6, 8), LEFT), Some(Guard::new((6, 7), LEFT))),
+            (Guard::new((6, 2), LEFT), Some(Guard::new((6, 2), UP))),
+            (Guard::new((0, 0), UP), None),
+            (Guard::new((9, 9), RIGHT), None),
+            (Guard::new((9, 9), DOWN), None),
+            (Guard::new((0, 0), LEFT), None),
         ];
 
         for (guard, expected) in examples {
@@ -271,7 +268,7 @@ mod tests {
     #[test]
     fn can_count_guard_positions() {
         assert_eq!(
-            count_guard_positions(&Guard::new(6, 4, UP), &example_lab()),
+            count_guard_positions(&Guard::new((6, 4), UP), &example_lab()),
             41
         );
     }
@@ -279,7 +276,7 @@ mod tests {
     #[test]
     fn can_check_for_loop() {
         let lab = example_lab();
-        let guard = Guard::new(6, 4, UP);
+        let guard = Guard::new((6, 4), UP);
 
         assert_eq!(will_loop(&guard, &lab), false);
 
@@ -297,6 +294,6 @@ mod tests {
 
     #[test]
     fn can_count_obstructions() {
-        assert_eq!(count_loops(&Guard::new(6, 4, UP), &example_lab()), 6)
+        assert_eq!(count_loops(&Guard::new((6, 4), UP), &example_lab()), 6)
     }
 }
