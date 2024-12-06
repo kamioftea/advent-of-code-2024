@@ -175,14 +175,26 @@ fn will_loop(guard: &Guard, lab: &Lab) -> bool {
     false
 }
 
+fn get_path(guard: &Guard, lab: &Lab) -> Vec<Guard> {
+    let mut path = Vec::new();
+    let mut prev_guard = Some(guard.clone());
+    while let Some(current_guard) = prev_guard {
+        path.push(current_guard);
+        prev_guard = current_guard.take_step(lab);
+    }
+
+    path
+}
+
 fn count_loops(guard: &Guard, lab: &Lab) -> usize {
     let mut lab = lab.clone();
     let mut counter = 0;
+    let mut tried = HashSet::new();
 
-    for row in 0..lab.height {
-        for column in 0..lab.width {
-            if lab.with_obstruction((row.clone(), column.clone())) {
-                if will_loop(&guard, &lab) {
+    for guard_position in get_path(guard, &lab) {
+        if let Some((row, column)) = guard_position.next_position(&lab) {
+            if tried.insert((row, column)) && lab.with_obstruction((row, column)) {
+                if will_loop(&guard_position, &lab) {
                     counter += 1;
                 }
                 lab.without_obstruction((row, column));
