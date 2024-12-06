@@ -129,11 +129,7 @@ fn parse_input(input: &String) -> (Lab, Guard) {
                     obstructions.insert((row, column));
                 }
                 '^' => {
-                    guard = Some(Guard {
-                        row,
-                        column,
-                        direction: UP,
-                    })
+                    guard = Some(Guard::new(row, column, UP));
                 }
                 _ => (),
             }
