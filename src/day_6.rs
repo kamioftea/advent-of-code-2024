@@ -52,11 +52,12 @@ struct Lab {
 }
 
 impl Lab {
-    fn with_obstruction(&self, position: (usize, usize)) -> Lab {
-        let mut new_lab = self.clone();
-        new_lab.obstructions.insert(position);
+    fn with_obstruction(&mut self, position: (usize, usize)) -> bool {
+        self.obstructions.insert(position)
+    }
 
-        new_lab
+    fn without_obstruction(&mut self, position: (usize, usize)) -> bool {
+        self.obstructions.remove(&position)
     }
 }
 
@@ -175,10 +176,21 @@ fn will_loop(guard: &Guard, lab: &Lab) -> bool {
 }
 
 fn count_loops(guard: &Guard, lab: &Lab) -> usize {
-    (0..lab.height)
-        .flat_map(move |r| (0..lab.width).map(move |c| (r, c)))
-        .filter(|&position| will_loop(&guard, &lab.with_obstruction(position)))
-        .count()
+    let mut lab = lab.clone();
+    let mut counter = 0;
+
+    for row in 0..lab.height {
+        for column in 0..lab.width {
+            if lab.with_obstruction((row.clone(), column.clone())) {
+                if will_loop(&guard, &lab) {
+                    counter += 1;
+                }
+                lab.without_obstruction((row, column));
+            }
+        }
+    }
+
+    counter
 }
 
 #[cfg(test)]
@@ -266,8 +278,10 @@ mod tests {
         let looping_positions = vec![(6, 3), (7, 6), (7, 7), (8, 1), (8, 3), (9, 7)];
 
         for position in looping_positions {
+            let mut lab = example_lab();
+            lab.with_obstruction(position);
             assert!(
-                will_loop(&guard, &lab.with_obstruction(position)),
+                will_loop(&guard, &lab),
                 "Should loop with an obstruction at {position:?}"
             )
         }
