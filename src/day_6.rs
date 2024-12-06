@@ -2,7 +2,7 @@
 //!
 //!
 
-use crate::day_6::Direction::{DOWN, LEFT, RIGHT, UP};
+use crate::day_6::Direction::*;
 use std::collections::HashSet;
 use std::fs;
 
@@ -11,7 +11,13 @@ use std::fs;
 /// - The puzzle input is expected to be at `<project_root>/res/day-6-input`
 /// - It is expected this will be called by [`super::main()`] when the user elects to run day 6.
 pub fn run() {
-    let _contents = fs::read_to_string("res/day-6-input.txt").expect("Failed to read file");
+    let contents = fs::read_to_string("res/day-6-input.txt").expect("Failed to read file");
+    let (lab, guard) = parse_input(&contents);
+
+    println!(
+        "The guard visits {} positions",
+        count_guard_positions(&guard, &lab)
+    )
 }
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
@@ -40,7 +46,7 @@ struct Lab {
     obstructions: HashSet<(usize, usize)>,
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
 struct Guard {
     row: usize,
     column: usize,
@@ -82,14 +88,14 @@ impl Guard {
         match self.direction {
             UP => self.row.checked_add_signed(-1).zip(Some(self.column)),
             RIGHT => {
-                Some(self.column).zip(self.column.checked_add_signed(1).filter(|&c| c < lab.width))
+                Some(self.row).zip(self.column.checked_add_signed(1).filter(|&c| c < lab.width))
             }
             DOWN => self
                 .row
                 .checked_add_signed(1)
                 .filter(|&r| r < lab.height)
                 .zip(Some(self.column)),
-            LEFT => Some(self.column).zip(self.column.checked_add_signed(-1)),
+            LEFT => Some(self.row).zip(self.column.checked_add_signed(-1)),
         }
     }
 }
@@ -129,9 +135,19 @@ fn parse_input(input: &String) -> (Lab, Guard) {
     )
 }
 
+fn count_guard_positions(guard: &Guard, lab: &Lab) -> usize {
+    let visited = &mut HashSet::new();
+    let mut guard = Some(guard.clone());
+    while let Some(current_guard) = guard {
+        visited.insert((current_guard.row, current_guard.column));
+        guard = current_guard.take_step(lab);
+    }
+
+    visited.len()
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::day_6::Direction::UP;
     use crate::day_6::*;
     
     fn example_lab() -> Lab {
@@ -177,22 +193,31 @@ mod tests {
     fn can_take_step() {
         let lab = example_lab();
 
+        let examples = vec![
+            (Guard::new(6, 4, UP), Some(Guard::new(5, 4, UP))),
+            (Guard::new(1, 4, UP), Some(Guard::new(1, 4, RIGHT))),
+            (Guard::new(1, 4, RIGHT), Some(Guard::new(1, 5, RIGHT))),
+            (Guard::new(1, 8, RIGHT), Some(Guard::new(1, 8, DOWN))),
+            (Guard::new(1, 8, DOWN), Some(Guard::new(2, 8, DOWN))),
+            (Guard::new(6, 8, DOWN), Some(Guard::new(6, 8, LEFT))),
+            (Guard::new(6, 8, LEFT), Some(Guard::new(6, 7, LEFT))),
+            (Guard::new(6, 2, LEFT), Some(Guard::new(6, 2, UP))),
+            (Guard::new(0, 0, UP), None),
+            (Guard::new(9, 9, RIGHT), None),
+            (Guard::new(9, 9, DOWN), None),
+            (Guard::new(0, 0, LEFT), None),
+        ];
+
+        for (guard, expected) in examples {
+            assert_eq!(guard.take_step(&lab), expected)
+        }
+    }
+
+    #[test]
+    fn can_count_guard_positions() {
         assert_eq!(
-            Guard::new(6, 4, UP).take_step(&lab),
-            Some(Guard::new(5, 4, UP))
+            count_guard_positions(&Guard::new(6, 4, UP), &example_lab()),
+            41
         );
-
-        assert_eq!(
-            Guard::new(1, 4, UP).take_step(&lab),
-            Some(Guard::new(1, 4, RIGHT))
-        );
-
-        assert_eq!(Guard::new(0, 0, UP).take_step(&lab), None);
-
-        assert_eq!(Guard::new(0, 0, LEFT).take_step(&lab), None);
-
-        assert_eq!(Guard::new(9, 9, RIGHT).take_step(&lab), None);
-
-        assert_eq!(Guard::new(9, 9, DOWN).take_step(&lab), None);
     }
 }
