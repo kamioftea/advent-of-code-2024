@@ -2,7 +2,7 @@
 //!
 //!
 
-use crate::day_6::Direction::UP;
+use crate::day_6::Direction::{DOWN, LEFT, RIGHT, UP};
 use std::collections::HashSet;
 use std::fs;
 
@@ -14,12 +14,23 @@ pub fn run() {
     let _contents = fs::read_to_string("res/day-6-input.txt").expect("Failed to read file");
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
 enum Direction {
     UP,
     RIGHT,
     DOWN,
     LEFT,
+}
+
+impl Direction {
+    fn turn(&self) -> Direction {
+        match self {
+            UP => RIGHT,
+            RIGHT => DOWN,
+            DOWN => LEFT,
+            LEFT => UP,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -34,6 +45,53 @@ struct Guard {
     row: usize,
     column: usize,
     direction: Direction,
+}
+
+impl Guard {
+    fn new(row: usize, column: usize, direction: Direction) -> Guard {
+        Guard {
+            row,
+            column,
+            direction,
+        }
+    }
+
+    fn with_position(&self, row: usize, column: usize) -> Guard {
+        Guard {
+            row,
+            column,
+            direction: self.direction,
+        }
+    }
+
+    fn with_direction(&self, direction: Direction) -> Guard {
+        Guard { direction, ..*self }
+    }
+
+    fn take_step(&self, lab: &Lab) -> Option<Guard> {
+        match self.next_position(lab) {
+            Some((row, column)) if lab.obstructions.contains(&(row, column)) => {
+                Some(self.with_direction(self.direction.turn()))
+            }
+            Some((row, column)) => Some(self.with_position(row, column)),
+            None => None,
+        }
+    }
+
+    fn next_position(&self, lab: &Lab) -> Option<(usize, usize)> {
+        match self.direction {
+            UP => self.row.checked_add_signed(-1).zip(Some(self.column)),
+            RIGHT => {
+                Some(self.column).zip(self.column.checked_add_signed(1).filter(|&c| c < lab.width))
+            }
+            DOWN => self
+                .row
+                .checked_add_signed(1)
+                .filter(|&r| r < lab.height)
+                .zip(Some(self.column)),
+            LEFT => Some(self.column).zip(self.column.checked_add_signed(-1)),
+        }
+    }
 }
 
 fn parse_input(input: &String) -> (Lab, Guard) {
@@ -112,13 +170,29 @@ mod tests {
         let (lab, guard) = parse_input(&input);
 
         assert_eq!(lab, example_lab());
+        assert_eq!(guard, Guard::new(6, 4, UP));
+    }
+
+    #[test]
+    fn can_take_step() {
+        let lab = example_lab();
+
         assert_eq!(
-            guard,
-            Guard {
-                row: 6,
-                column: 4,
-                direction: UP
-            }
+            Guard::new(6, 4, UP).take_step(&lab),
+            Some(Guard::new(5, 4, UP))
         );
+
+        assert_eq!(
+            Guard::new(1, 4, UP).take_step(&lab),
+            Some(Guard::new(1, 4, RIGHT))
+        );
+
+        assert_eq!(Guard::new(0, 0, UP).take_step(&lab), None);
+
+        assert_eq!(Guard::new(0, 0, LEFT).take_step(&lab), None);
+
+        assert_eq!(Guard::new(9, 9, RIGHT).take_step(&lab), None);
+
+        assert_eq!(Guard::new(9, 9, DOWN).take_step(&lab), None);
     }
 }
