@@ -10,6 +10,7 @@
 
 use crate::day_6::Direction::*;
 use itertools::Itertools;
+use rayon::prelude::*;
 use std::collections::HashSet;
 use std::fs;
 use std::iter::successors;
@@ -66,13 +67,14 @@ struct Lab {
 
 impl Lab {
     /// Add an obstruction to the lab, returns false if there was already an obstruction in that Position
-    fn with_obstruction(&mut self, position: Position) -> bool {
-        self.obstructions.insert(position)
-    }
+    fn with_obstruction(&self, position: Position) -> Lab {
+        let mut obstructions = self.obstructions.clone();
+        obstructions.insert(position);
 
-    /// Remove an obstruction from a Position, returns false if there was nothing there to remove
-    fn without_obstruction(&mut self, position: Position) -> bool {
-        self.obstructions.remove(&position)
+        Lab {
+            obstructions,
+            ..self.clone()
+        }
     }
 }
 
@@ -191,24 +193,13 @@ fn is_loop(guard: &Guard, lab: &Lab) -> bool {
 /// Try adding obstacles to all locations on the guard's route, and see which ones cause the guard to end up in an
 /// infinite loop
 fn count_obstructions_causing_loops(guard: &Guard, lab: &Lab) -> usize {
-    let mut mut_lab = lab.clone();
-    let mut counter = 0;
-    let mut tried = HashSet::new();
-    // Can't be placed on the staring position
-    tried.insert(guard.position);
-
-    for guard_position in route_iter(guard, lab) {
-        if let Some(position) = guard_position.next_position(&lab) {
-            if tried.insert(position) && mut_lab.with_obstruction(position) {
-                if is_loop(&guard_position, &mut_lab) {
-                    counter += 1;
-                }
-                mut_lab.without_obstruction(position);
-            }
-        }
-    }
-
-    counter
+    route_iter(guard, lab)
+        .flat_map(|g| Some(g).zip(g.next_position(lab)))
+        .filter(|(_, pos)| *pos != guard.position)
+        .unique_by(|(_, pos)| *pos)
+        .par_bridge()
+        .filter(|(g, pos)| is_loop(g, &lab.with_obstruction(*pos)))
+        .count()
 }
 
 #[cfg(test)]
@@ -296,10 +287,8 @@ mod tests {
         let looping_positions = vec![(6, 3), (7, 6), (7, 7), (8, 1), (8, 3), (9, 7)];
 
         for position in looping_positions {
-            let mut lab = example_lab();
-            lab.with_obstruction(position);
             assert!(
-                is_loop(&guard, &lab),
+                is_loop(&guard, &example_lab().with_obstruction(position)),
                 "Should loop with an obstruction at {position:?}"
             )
         }

@@ -2,6 +2,7 @@
 //!
 //!
 
+use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::fs;
@@ -126,7 +127,7 @@ fn calculate_calibration_total_part_2(equations: &Vec<Equation>) -> i64 {
     ];
 
     equations
-        .into_iter()
+        .par_iter()
         .filter(|&eq| is_solvable(eq, &ops))
         .map(|eq| eq.target)
         .sum()

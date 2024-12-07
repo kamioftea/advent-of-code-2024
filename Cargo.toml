@@ -10,9 +10,6 @@ itertools = { version = "0.13.0", features = [] }
 text_io = "0.1.12"
 error-chain = { version = "0.12.4", features = [] }
 reqwest = { version = "0.12.9", features = ["blocking", "cookies"] }
-cookie = "0.18.1"
-url = "2.5.4"
 regex = "1.11.1"
-num = "0.4.3"
-time = "0.3.36"
 scraper = "0.21.0"
+rayon = "1.10.0"
