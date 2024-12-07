@@ -333,7 +333,10 @@ fn count_obstructions_causing_loops(guard: &Guard, lab: &Lab) -> usize {
 
 #[test]
 fn can_count_obstructions() {
-    assert_eq!(count_obstructions_causing_loops(&Guard::new(6, 4, UP), &example_lab()), 6)
+    assert_eq!(
+        count_obstructions_causing_loops(&Guard::new(6, 4, UP), &example_lab()),
+        6
+    )
 }
 ```
 
