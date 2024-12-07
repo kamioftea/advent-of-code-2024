@@ -16,9 +16,16 @@ pub fn run() {
 
     println!(
         "The calibration total is {}",
-        calculate_calibration_total(&equations)
-    )
+        calculate_calibration_total_part_1(&equations)
+    );
+
+    println!(
+        "The calibration total with concatenation is {}",
+        calculate_calibration_total_part_2(&equations)
+    );
 }
+
+type Operation = fn(i64, i64) -> Option<i64>;
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct Equation {
@@ -36,24 +43,13 @@ impl Equation {
         }
     }
 
-    fn apply<Op>(&self, operation: Op) -> Option<Equation>
-    where
-        Op: FnOnce(i64, i64) -> Option<i64>,
-    {
+    fn apply(&self, operation: Operation) -> Option<Equation> {
         let mut remaining = self.remaining_numbers.iter();
         remaining
             .next()
             .and_then(|&next| operation(self.total, next))
-            .filter(|&sum| sum <= self.target)
+            .filter(|&total| total <= self.target)
             .map(|sum| Equation::new(self.target, sum, remaining.cloned().collect()))
-    }
-
-    fn apply_add(&self) -> Option<Equation> {
-        self.apply(|acc, next| acc.checked_add(next))
-    }
-
-    fn apply_mul(&self) -> Option<Equation> {
-        self.apply(|acc, next| acc.checked_mul(next))
     }
 }
 
@@ -62,9 +58,9 @@ impl Ord for Equation {
         let self_remaining = self.remaining_numbers.len();
         let other_remaining = other.remaining_numbers.len();
 
-        self_remaining
-            .cmp(&other_remaining)
-            .then_with(|| (self.target - self.total).cmp(&(other.target - other.total)))
+        other_remaining
+            .cmp(&self_remaining)
+            .then_with(|| (other.target - other.total).cmp(&(self.target - self.total)))
     }
 }
 
@@ -90,7 +86,7 @@ fn parse_input(input: &String) -> Vec<Equation> {
     input.lines().map(parse_calibration).collect()
 }
 
-fn is_solveable(equation: &Equation) -> bool {
+fn is_solvable(equation: &Equation, ops: &Vec<Operation>) -> bool {
     let mut heap: BinaryHeap<Equation> = BinaryHeap::new();
     heap.push(equation.clone());
 
@@ -99,22 +95,39 @@ fn is_solveable(equation: &Equation) -> bool {
             return true;
         }
 
-        if let Some(added) = curr.apply_add() {
-            heap.push(added);
-        }
-
-        if let Some(multiplied) = curr.apply_mul() {
-            heap.push(multiplied);
-        }
+        ops.iter()
+            .flat_map(|&op| curr.apply(op))
+            .for_each(|eq| heap.push(eq))
     }
 
     false
 }
 
-fn calculate_calibration_total(equations: &Vec<Equation>) -> i64 {
+fn calculate_calibration_total_part_1(equations: &Vec<Equation>) -> i64 {
+    #[rustfmt::skip]
+    let ops: Vec<Operation> = vec![
+        |acc, next| acc.checked_add(next),
+        |acc, next| acc.checked_mul(next)
+    ];
+
     equations
         .into_iter()
-        .filter(|&eq| is_solveable(eq))
+        .filter(|&eq| is_solvable(eq, &ops))
+        .map(|eq| eq.target)
+        .sum()
+}
+
+fn calculate_calibration_total_part_2(equations: &Vec<Equation>) -> i64 {
+    #[rustfmt::skip]
+    let ops: Vec<Operation> = vec![
+        |acc, next| acc.checked_add(next),
+        |acc, next| acc.checked_mul(next),
+        |acc, next| format!("{acc}{next}").parse().ok(),
+    ];
+
+    equations
+        .into_iter()
+        .filter(|&eq| is_solvable(eq, &ops))
         .map(|eq| eq.target)
         .sum()
 }
@@ -155,14 +168,43 @@ mod tests {
     }
 
     #[test]
-    fn can_check_equation() {
+    fn can_check_equation_par1_1() {
         let equations = example_equations();
         let examples = equations.iter().zip(vec![
             true, true, false, false, false, false, false, false, true,
         ]);
 
+        #[rustfmt::skip]
+        let ops: Vec<Operation> = vec![
+            |acc, next| acc.checked_add(next),
+            |acc, next| acc.checked_mul(next)
+        ];
+
         for (equation, expected) in examples {
-            assert_eq!(is_solveable(equation), expected)
+            assert_eq!(is_solvable(equation, &ops), expected)
+        }
+    }
+
+    #[test]
+    fn can_check_equation_part_2() {
+        let equations = example_equations();
+        let examples = equations.iter().zip(vec![
+            true, true, false, true, true, false, true, false, true,
+        ]);
+
+        #[rustfmt::skip]
+        let ops: Vec<Operation> = vec![
+            |acc, next| acc.checked_add(next),
+            |acc, next| acc.checked_mul(next),
+            |acc, next| format!("{acc}{next}").parse().ok()
+        ];
+
+        for (equation, expected) in examples {
+            assert_eq!(
+                is_solvable(equation, &ops),
+                expected,
+                "Expected {equation:?} to be {expected}"
+            )
         }
     }
 
@@ -187,24 +229,54 @@ mod tests {
     }
 
     #[test]
-    fn can_apply_ops() {
-        assert_eq!(
-            Equation::new(190, 10, vec![19]).apply_add(),
-            Some(Equation::new(190, 29, vec![]))
-        );
-        assert_eq!(Equation::new(190, 190, vec![19]).apply_add(), None);
-        assert_eq!(Equation::new(190, 29, vec![]).apply_add(), None);
+    fn can_apply_add() {
+        let add: Operation = |acc, next| acc.checked_add(next);
 
         assert_eq!(
-            Equation::new(190, 10, vec![19]).apply_mul(),
+            Equation::new(190, 10, vec![19]).apply(add),
+            Some(Equation::new(190, 29, vec![]))
+        );
+        assert_eq!(Equation::new(190, 190, vec![19]).apply(add), None);
+        assert_eq!(Equation::new(190, 29, vec![]).apply(add), None);
+    }
+
+    #[test]
+    fn can_apply_mul() {
+        let mul: Operation = |acc, next| acc.checked_mul(next);
+
+        assert_eq!(
+            Equation::new(190, 10, vec![19]).apply(mul),
             Some(Equation::new(190, 190, vec![]))
         );
-        assert_eq!(Equation::new(190, 190, vec![]).apply_mul(), None);
-        assert_eq!(Equation::new(190, 10, vec![20]).apply_mul(), None);
+        assert_eq!(Equation::new(190, 190, vec![]).apply(mul), None);
+        assert_eq!(Equation::new(190, 10, vec![20]).apply(mul), None);
+    }
+
+    #[test]
+    fn can_apply_concat() {
+        let concat: Operation = |acc, next| format!("{acc}{next}").parse().ok();
+
+        assert_eq!(
+            Equation::new(1090, 10, vec![19]).apply(concat),
+            Some(Equation::new(1090, 1019, vec![]))
+        );
+        assert_eq!(Equation::new(190, 190, vec![]).apply(concat), None);
+        assert_eq!(Equation::new(190, 10, vec![19]).apply(concat), None);
     }
 
     #[test]
     fn can_calculate_calibration_total() {
-        assert_eq!(calculate_calibration_total(&example_equations()), 3749)
+        assert_eq!(
+            calculate_calibration_total_part_1(&example_equations()),
+            3749
+        )
+    }
+
+    #[test]
+    fn can_calculate_calibration_total_part_2() {
+        assert_eq!(
+            calculate_calibration_total_part_2(&example_equations()),
+            11387
+        )
     }
 }
