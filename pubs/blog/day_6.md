@@ -411,6 +411,28 @@ fn count_obstructions_causing_loops(guard: &Guard, lab: &Lab) -> usize {
 
 This gets it down to 5s / 0.5s, which I decide is quick enough and call it there.
 
+### Edit 7th Dec 2024 - adding `rayon` / parallelism
+
+Having added `rayon` to [optimise day 7](../day_7/#optimisations), I decided to also parallelise the obstruction
+position work. There was a bit more to do here, as I needed to:
+
+* Revert the changes to use a mutable `Lab` when adding obstructions, and instead make immutable copies
+* Rework the for-loop to be an iterator, using `unique_by` to replace the set of attempted obstruction locations.
+
+```rust
+fn count_obstructions_causing_loops(guard: &Guard, lab: &Lab) -> usize {
+    route_iter(guard, lab)
+        .flat_map(|g| Some(g).zip(g.next_position(lab)))
+        .filter(|(_, pos)| *pos != guard.position)
+        .unique_by(|(_, pos)| *pos)
+        .par_bridge()
+        .filter(|(g, pos)| is_loop(g, &lab.with_obstruction(*pos)))
+        .count()
+}
+```
+
+This resulted in a ~4-5x speed up on a 14 core processor.
+
 ## Wrap up
 
 Today was a good day for refactoring. I got to having a slow, messy, but working solution - then reworked it until

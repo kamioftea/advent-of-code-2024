@@ -1,6 +1,9 @@
 //! This is my solution for [Advent of Code - Day 7: _Bridge Repair_](https://adventofcode.com/2024/day/7)
 //!
+//! [`parse_input`] uses [`parse_equation`] to create an [`Equation`] for each row of the inout file.
 //!
+//! [`calculate_calibration_total`] uses [`is_solvable`] to solve both parts, [`part_1_operations`] and
+//! [`part_2_operations`] providing the different operation lists.
 
 use rayon::prelude::*;
 use std::cmp::Ordering;
@@ -26,8 +29,11 @@ pub fn run() {
     );
 }
 
+/// An operation to apply with the running total on the lhs, and the next number as the rhs.
 type Operation = fn(i64, i64) -> Option<i64>;
 
+/// An equation missing operators, stored as a target number, the running total and the numbers that have yet to be
+/// combined into to the total.
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct Equation {
     target: i64,
@@ -36,14 +42,17 @@ struct Equation {
 }
 
 impl Equation {
-    fn new(target: i64, current: i64, remaining_numbers: Vec<i64>) -> Equation {
+    /// Constructor
+    fn new(target: i64, total: i64, remaining_numbers: Vec<i64>) -> Equation {
         Equation {
             target,
-            total: current,
+            total,
             remaining_numbers,
         }
     }
 
+    /// Apply an operation, returns None if the operation does, or the total is now higher than the target, as
+    /// operations can only increase the total
     fn apply(&self, operation: Operation) -> Option<Equation> {
         let mut remaining = self.remaining_numbers.iter();
         remaining
@@ -54,6 +63,9 @@ impl Equation {
     }
 }
 
+/// Ordering for the BinaryHeap. The best candidate equation has the greatest ordering. This is done by
+/// * Fewest numbers remaining to combine
+/// * The least distance from the running total to the target
 impl Ord for Equation {
     fn cmp(&self, other: &Self) -> Ordering {
         let self_remaining = self.remaining_numbers.len();
@@ -65,14 +77,16 @@ impl Ord for Equation {
     }
 }
 
-// `PartialOrd` needs to be implemented as well.
+/// `PartialOrd` needs to be implemented if `Ord` is implemented, but can delegate to it.
 impl PartialOrd for Equation {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-fn parse_calibration(line: &str) -> Equation {
+/// Parse a line of input as an Equation. The first operator is applied to the first two numbers, so the first number
+/// in the list is used to initialise the running total.
+fn parse_equation(line: &str) -> Equation {
     let (target, number_list) = line.split_once(": ").unwrap();
     let mut numbers = number_list.split(" ").flat_map(|num| num.parse());
 
@@ -83,10 +97,14 @@ fn parse_calibration(line: &str) -> Equation {
     )
 }
 
+/// Use [`parse_equation`] to parse each line of the input
 fn parse_input(input: &String) -> Vec<Equation> {
-    input.lines().map(parse_calibration).collect()
+    input.lines().map(parse_equation).collect()
 }
 
+/// Do depth-first search to solve the equation using permutations of the available operators, returning true if
+/// there is at least one permutation of operators that results in the target number. Operations must increase the
+/// total, or return `None` for all possible inputs.
 fn is_solvable(equation: &Equation, ops: &Vec<Operation>) -> bool {
     let mut heap: BinaryHeap<Equation> = BinaryHeap::new();
     heap.push(equation.clone());
@@ -121,6 +139,7 @@ fn part_2_operations() -> Vec<Operation> {
     ]
 }
 
+/// The puzzle solution is the sum of the equations that are solvable.
 fn calculate_calibration_total(equations: &Vec<Equation>, ops: &Vec<Operation>) -> i64 {
     equations
         .par_iter()
