@@ -210,20 +210,29 @@ mod tests {
 
     #[test]
     fn can_order_equations() {
+        assert_eq!(
+            Equation::new(190, 29, vec![]).cmp(&Equation::new(190, 19, vec![10])),
+            Ordering::Greater
+        );
+        assert_eq!(
+            Equation::new(190, 190, vec![]).cmp(&Equation::new(190, 29, vec![])),
+            Ordering::Greater
+        );
+
         let sorted: Vec<Equation> = example_equations().into_iter().sorted().collect();
 
         assert_eq!(
             sorted,
             vec![
-                Equation::new(83, 17, vec![5]),
-                Equation::new(156, 15, vec![6]),
-                Equation::new(190, 10, vec![19]),
-                Equation::new(192, 17, vec![8, 14]),
-                Equation::new(3267, 81, vec![40, 27]),
-                Equation::new(161011, 16, vec![10, 13]),
-                Equation::new(292, 11, vec![6, 16, 20]),
-                Equation::new(7290, 6, vec![8, 6, 15]),
                 Equation::new(21037, 9, vec![7, 18, 13]),
+                Equation::new(7290, 6, vec![8, 6, 15]),
+                Equation::new(292, 11, vec![6, 16, 20]),
+                Equation::new(161011, 16, vec![10, 13]),
+                Equation::new(3267, 81, vec![40, 27]),
+                Equation::new(192, 17, vec![8, 14]),
+                Equation::new(190, 10, vec![19]),
+                Equation::new(156, 15, vec![6]),
+                Equation::new(83, 17, vec![5]),
             ]
         )
     }
