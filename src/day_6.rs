@@ -1,10 +1,18 @@
 //! This is my solution for [Advent of Code - Day 6: _Guard Gallivant_](https://adventofcode.com/2024/day/6)
 //!
+//! [`parse_input`] captures a representation of the [`Lab`] and [`Guard`]. [`Guard::take_step`] is the key function
+//! for moving a guard, delegating to a bunch of helper functions in the same `impl`.
 //!
+//![`count_guard_positions`] is the solution to part one, using [`route_iter`] to generate the sequence of positions
+//! visited
+//!
+//! [`count_obstructions_causing_loops`] is the solution to part 2, using [`is_loop`] along with reusing some of part 1.
 
 use crate::day_6::Direction::*;
+use itertools::Itertools;
 use std::collections::HashSet;
 use std::fs;
+use std::iter::successors;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
 ///
@@ -21,10 +29,11 @@ pub fn run() {
 
     println!(
         "There are {} positions where obstructions will cause a loop",
-        count_loops(&guard, &lab)
+        count_obstructions_causing_loops(&guard, &lab)
     )
 }
 
+/// The direction the guard is facing
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 enum Direction {
     UP,
@@ -34,6 +43,7 @@ enum Direction {
 }
 
 impl Direction {
+    /// new Direction after a 90-degree turn
     fn turn(&self) -> Direction {
         match self {
             UP => RIGHT,
@@ -46,6 +56,7 @@ impl Direction {
 
 type Position = (usize, usize);
 
+/// Represent a lab by its dimensions and a set of Positions with obstructions
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct Lab {
     width: usize,
@@ -54,15 +65,18 @@ struct Lab {
 }
 
 impl Lab {
+    /// Add an obstruction to the lab, returns false if there was already an obstruction in that Position
     fn with_obstruction(&mut self, position: Position) -> bool {
         self.obstructions.insert(position)
     }
 
+    /// Remove an obstruction from a Position, returns false if there was nothing there to remove
     fn without_obstruction(&mut self, position: Position) -> bool {
         self.obstructions.remove(&position)
     }
 }
 
+/// A Guard represented by their position and facing
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 struct Guard {
     position: Position,
@@ -70,6 +84,7 @@ struct Guard {
 }
 
 impl Guard {
+    /// Basic constructor
     fn new(position: Position, direction: Direction) -> Guard {
         Guard {
             position,
@@ -77,6 +92,31 @@ impl Guard {
         }
     }
 
+    /// Step up or down row(s) - None if the new row is outside the lab
+    fn step_row(&self, delta: isize, &Lab { height, .. }: &Lab) -> Option<Position> {
+        let (row, column) = self.position;
+        let new_row = row.checked_add_signed(delta).filter(|&c| c < height);
+        new_row.zip(Some(column.clone()))
+    }
+
+    /// Step across column(s) - None if the new column is outside the lab
+    fn step_column(&self, delta: isize, &Lab { width, .. }: &Lab) -> Option<Position> {
+        let (row, column) = self.position;
+        let new_column = column.checked_add_signed(delta).filter(|&c| c < width);
+        Some(row.clone()).zip(new_column)
+    }
+
+    /// Given the current facing, get the next position in that direction
+    fn next_position(&self, lab: &Lab) -> Option<(usize, usize)> {
+        match self.direction {
+            UP => self.step_row(-1, lab),
+            RIGHT => self.step_column(1, lab),
+            DOWN => self.step_row(1, lab),
+            LEFT => self.step_column(-1, lab),
+        }
+    }
+
+    /// A copy of the guard in a new position
     fn with_position(&self, position: Position) -> Guard {
         Guard {
             position,
@@ -84,10 +124,12 @@ impl Guard {
         }
     }
 
+    /// A copy of the guard with a new facing
     fn with_direction(&self, direction: Direction) -> Guard {
         Guard { direction, ..*self }
     }
 
+    /// Attempt to take a step forward, turning if obstructed. Returns None if the step takes the guard out of the lab
     fn take_step(&self, lab: &Lab) -> Option<Guard> {
         match self.next_position(lab) {
             Some(position) if lab.obstructions.contains(&position) => {
@@ -97,21 +139,9 @@ impl Guard {
             None => None,
         }
     }
-
-    fn next_position(&self, lab: &Lab) -> Option<(usize, usize)> {
-        let (row, column) = self.position;
-        match self.direction {
-            UP => row.checked_add_signed(-1).zip(Some(column)),
-            RIGHT => Some(row).zip(column.checked_add_signed(1).filter(|&c| c < lab.width)),
-            DOWN => row
-                .checked_add_signed(1)
-                .filter(|&r| r < lab.height)
-                .zip(Some(column)),
-            LEFT => Some(row).zip(column.checked_add_signed(-1)),
-        }
-    }
 }
 
+/// Walk the input, building a set of obstructions and identifying the guard's position
 fn parse_input(input: &String) -> (Lab, Guard) {
     let mut lines = input.lines();
     let width = lines.next().unwrap().len();
@@ -143,54 +173,37 @@ fn parse_input(input: &String) -> (Lab, Guard) {
     )
 }
 
+/// Return the list of positions and facings a guard follows until they leave the lab
+fn route_iter<'a>(guard: &'a Guard, lab: &'a Lab) -> impl Iterator<Item = Guard> + 'a {
+    successors(Some(guard.clone()), |g| g.take_step(lab))
+}
+
+/// Count the unique positions visited by the guard before she leaves the lab
 fn count_guard_positions(guard: &Guard, lab: &Lab) -> usize {
-    let visited = &mut HashSet::new();
-    let mut guard = Some(guard.clone());
-    while let Some(current_guard) = guard {
-        visited.insert(current_guard.position);
-        guard = current_guard.take_step(lab);
-    }
-
-    visited.len()
+    route_iter(guard, &lab).map(|g| g.position).unique().count()
 }
 
-fn will_loop(guard: &Guard, lab: &Lab) -> bool {
-    let path = &mut HashSet::new();
-    let mut guard = Some(guard.clone());
-    while let Some(current_guard) = guard {
-        if path.contains(&current_guard) {
-            return true;
-        }
-        path.insert(current_guard);
-        guard = current_guard.take_step(lab);
-    }
-
-    false
+/// Will the guard end up in an infinite loop for the provided lab and starting position
+fn is_loop(guard: &Guard, lab: &Lab) -> bool {
+    route_iter(&guard, &lab).duplicates().next().is_some()
 }
 
-fn get_path(guard: &Guard, lab: &Lab) -> Vec<Guard> {
-    let mut path = Vec::new();
-    let mut prev_guard = Some(guard.clone());
-    while let Some(current_guard) = prev_guard {
-        path.push(current_guard);
-        prev_guard = current_guard.take_step(lab);
-    }
-
-    path
-}
-
-fn count_loops(guard: &Guard, lab: &Lab) -> usize {
-    let mut lab = lab.clone();
+/// Try adding obstacles to all locations on the guard's route, and see which ones cause the guard to end up in an
+/// infinite loop
+fn count_obstructions_causing_loops(guard: &Guard, lab: &Lab) -> usize {
+    let mut mut_lab = lab.clone();
     let mut counter = 0;
     let mut tried = HashSet::new();
+    // Can't be placed on the staring position
+    tried.insert(guard.position);
 
-    for guard_position in get_path(guard, &lab) {
+    for guard_position in route_iter(guard, lab) {
         if let Some(position) = guard_position.next_position(&lab) {
-            if tried.insert(position) && lab.with_obstruction(position) {
-                if will_loop(&guard_position, &lab) {
+            if tried.insert(position) && mut_lab.with_obstruction(position) {
+                if is_loop(&guard_position, &mut_lab) {
                     counter += 1;
                 }
-                lab.without_obstruction(position);
+                mut_lab.without_obstruction(position);
             }
         }
     }
@@ -274,11 +287,11 @@ mod tests {
     }
 
     #[test]
-    fn can_check_for_loop() {
+    fn can_check_if_route_loops() {
         let lab = example_lab();
         let guard = Guard::new((6, 4), UP);
 
-        assert_eq!(will_loop(&guard, &lab), false);
+        assert_eq!(is_loop(&guard, &lab), false);
 
         let looping_positions = vec![(6, 3), (7, 6), (7, 7), (8, 1), (8, 3), (9, 7)];
 
@@ -286,7 +299,7 @@ mod tests {
             let mut lab = example_lab();
             lab.with_obstruction(position);
             assert!(
-                will_loop(&guard, &lab),
+                is_loop(&guard, &lab),
                 "Should loop with an obstruction at {position:?}"
             )
         }
@@ -294,6 +307,9 @@ mod tests {
 
     #[test]
     fn can_count_obstructions() {
-        assert_eq!(count_loops(&Guard::new((6, 4), UP), &example_lab()), 6)
+        assert_eq!(
+            count_obstructions_causing_loops(&Guard::new((6, 4), UP), &example_lab()),
+            6
+        )
     }
 }
