@@ -17,12 +17,12 @@ pub fn run() {
 
     println!(
         "The calibration total is {}",
-        calculate_calibration_total_part_1(&equations)
+        calculate_calibration_total(&equations, &part_1_operations())
     );
 
     println!(
         "The calibration total with concatenation is {}",
-        calculate_calibration_total_part_2(&equations)
+        calculate_calibration_total(&equations, &part_2_operations())
     );
 }
 
@@ -104,28 +104,24 @@ fn is_solvable(equation: &Equation, ops: &Vec<Operation>) -> bool {
     false
 }
 
-fn calculate_calibration_total_part_1(equations: &Vec<Equation>) -> i64 {
-    #[rustfmt::skip]
-    let ops: Vec<Operation> = vec![
-        |acc, next| acc.checked_add(next),
-        |acc, next| acc.checked_mul(next)
-    ];
-
-    equations
-        .into_iter()
-        .filter(|&eq| is_solvable(eq, &ops))
-        .map(|eq| eq.target)
-        .sum()
+//noinspection RsUnnecessaryParentheses Prevent rust_fmt mangling the closures
+fn part_1_operations() -> Vec<Operation> {
+    vec![
+        (|acc, next| acc.checked_add(next)),
+        (|acc, next| acc.checked_mul(next)),
+    ]
 }
 
-fn calculate_calibration_total_part_2(equations: &Vec<Equation>) -> i64 {
-    #[rustfmt::skip]
-    let ops: Vec<Operation> = vec![
-        |acc, next| acc.checked_add(next),
-        |acc, next| acc.checked_mul(next),
-        |acc, next| format!("{acc}{next}").parse().ok(),
-    ];
+//noinspection RsUnnecessaryParentheses Prevent rust_fmt mangling the closures
+fn part_2_operations() -> Vec<Operation> {
+    vec![
+        (|acc, next| acc.checked_add(next)),
+        (|acc, next| acc.checked_mul(next)),
+        (|acc, next| format!("{acc}{next}").parse().ok()),
+    ]
+}
 
+fn calculate_calibration_total(equations: &Vec<Equation>, ops: &Vec<Operation>) -> i64 {
     equations
         .par_iter()
         .filter(|&eq| is_solvable(eq, &ops))
@@ -169,20 +165,19 @@ mod tests {
     }
 
     #[test]
-    fn can_check_equation_par1_1() {
+    fn can_check_equation_part_1() {
         let equations = example_equations();
         let examples = equations.iter().zip(vec![
             true, true, false, false, false, false, false, false, true,
         ]);
-
-        #[rustfmt::skip]
-        let ops: Vec<Operation> = vec![
-            |acc, next| acc.checked_add(next),
-            |acc, next| acc.checked_mul(next)
-        ];
+        let ops = part_1_operations();
 
         for (equation, expected) in examples {
-            assert_eq!(is_solvable(equation, &ops), expected)
+            assert_eq!(
+                is_solvable(equation, &ops),
+                expected,
+                "Expected {equation:?} to be {expected}"
+            )
         }
     }
 
@@ -192,13 +187,7 @@ mod tests {
         let examples = equations.iter().zip(vec![
             true, true, false, true, true, false, true, false, true,
         ]);
-
-        #[rustfmt::skip]
-        let ops: Vec<Operation> = vec![
-            |acc, next| acc.checked_add(next),
-            |acc, next| acc.checked_mul(next),
-            |acc, next| format!("{acc}{next}").parse().ok()
-        ];
+        let ops = part_2_operations();
 
         for (equation, expected) in examples {
             assert_eq!(
@@ -277,15 +266,12 @@ mod tests {
     #[test]
     fn can_calculate_calibration_total() {
         assert_eq!(
-            calculate_calibration_total_part_1(&example_equations()),
+            calculate_calibration_total(&example_equations(), &part_1_operations()),
             3749
-        )
-    }
+        );
 
-    #[test]
-    fn can_calculate_calibration_total_part_2() {
         assert_eq!(
-            calculate_calibration_total_part_2(&example_equations()),
+            calculate_calibration_total(&example_equations(), &part_2_operations()),
             11387
         )
     }
