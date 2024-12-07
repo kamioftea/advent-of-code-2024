@@ -340,7 +340,7 @@ that it is as simple as adding `use rayon::prelude::*`, and replacing `.iter()` 
           .filter(|&eq| is_solvable(eq, &ops))
           .map(|eq| eq.target)
           .sum()
-}
+  }
 ```
 
 This took it to ~0.1s to run. Going back to day 6 and adding rayon to bit more work, see

@@ -122,6 +122,7 @@ fn is_solvable(equation: &Equation, ops: &Vec<Operation>) -> bool {
     false
 }
 
+/// The operations available when solving part 1, add and multiply
 //noinspection RsUnnecessaryParentheses Prevent rust_fmt mangling the closures
 fn part_1_operations() -> Vec<Operation> {
     vec![
@@ -130,6 +131,7 @@ fn part_1_operations() -> Vec<Operation> {
     ]
 }
 
+/// The operations available when solving part 2, add multiply, and concat
 //noinspection RsUnnecessaryParentheses Prevent rust_fmt mangling the closures
 fn part_2_operations() -> Vec<Operation> {
     vec![
