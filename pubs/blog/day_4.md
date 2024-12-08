@@ -22,7 +22,7 @@ struct Wordsearch {
 }
 ```
 
-Then I'll implement a FromStr so that we can parse the puzzle input into a `Wordsearch`. This involve
+Then I'll implement a FromStr so that I can parse the puzzle input into a `Wordsearch`. This involve
 
 ```rust
 impl FromStr for Wordsearch {
@@ -211,7 +211,7 @@ fn can_count_xmasses() {
 
 ## Part 2 - X marks the spot
 
-I was expecting some flavour of expanding or wrapping round the grid, but instead we have a different pattern to match.
+I was expecting some flavour of expanding or wrapping round the grid, but instead I have a different pattern to match.
 
 I ponder about finding the `A`s and then comparing the two pairs of diagonal corners. Then I notice that as I
 already have a word finder, it'll be easier to use that and take the words from each top corner and see if they spell

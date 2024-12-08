@@ -132,7 +132,7 @@ fn can_order_equations() {
 
 Next I need to be able to step the equation by one operation. One useful feature of the operators provided is that
 with the terms of the equation all being positive, the total can only increase as addition or multiplication are
-applied. This means we can ignore any paths that go over the equation's target. So I need a way to pass different
+applied. This means I can ignore any paths that go over the equation's target. So I need a way to pass different
 binary operations, that only return the next step if it could be valid.
 
 ```rust

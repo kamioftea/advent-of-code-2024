@@ -287,7 +287,7 @@ fn count_guard_positions(guard: &Guard, lab: &Lab) -> usize {
 
 The twist is to find all the places in the lab where an obstruction could be added to cause the guard to walk in a
 loop. First I decide to work out if a Lab and starting position would be a loop. This is done similarly to part 1,
-but we need to store the direction the guard was facing. If it ever repeats (same position and direction), then the
+but I need to store the direction the guard was facing. If it ever repeats (same position and direction), then the
 guard will keep looping from that point.
 
 ```rust
