@@ -58,69 +58,75 @@ fn parse_input(input: &String) -> AntennaMap {
     }
 }
 
-fn find_antinodes_for_pair(
-    &(r1, c1): &Coordinate,
-    &(r2, c2): &Coordinate,
+type AntinodeStrategy = fn(Coordinate, Coordinate, &(usize, usize)) -> Vec<Coordinate>;
+
+fn sequence_from_antenna(
+    (r, c): Coordinate,
+    (dr, dc): (isize, isize),
     (height, width): &(usize, usize),
+) -> Vec<Coordinate> {
+    iterate(0, |i| i + 1)
+        .map(move |i| {
+            r.checked_add_signed(i * dr)
+                .zip(c.checked_add_signed(i * dc))
+                .filter(|(r, c)| r < height && c < width)
+        })
+        .while_some()
+        .collect()
+}
+
+fn find_antinodes_for_pair(
+    (r1, c1): Coordinate,
+    (r2, c2): Coordinate,
+    bounds: &(usize, usize),
 ) -> Vec<Coordinate> {
     let dr = r1 as isize - r2 as isize;
     let dc = c1 as isize - c2 as isize;
 
-    vec![
-        r1.checked_add_signed(dr).zip(c1.checked_add_signed(dc)),
-        r2.checked_add_signed(-dr).zip(c2.checked_add_signed(-dc)),
-    ]
-    .iter()
-    .flatten()
-    .filter(|(r, c)| r < height && c < width)
-    .cloned()
-    .collect()
+    let increasing = sequence_from_antenna((r1, c1).clone(), (dr, dc).clone(), bounds);
+    let decreasing = sequence_from_antenna((r2, c2), (-dr, -dc), bounds);
+
+    increasing
+        .iter()
+        .dropping(1)
+        .take(1)
+        .chain(decreasing.iter().dropping(1).take(1))
+        .cloned()
+        .collect()
 }
 
 fn find_antinodes_for_pair_with_resonant_harmonics(
-    &(r1, c1): &Coordinate,
-    &(r2, c2): &Coordinate,
-    (height, width): &(usize, usize),
+    (r1, c1): Coordinate,
+    (r2, c2): Coordinate,
+    bounds: &(usize, usize),
 ) -> Vec<Coordinate> {
     let dr = r1 as isize - r2 as isize;
     let dc = c1 as isize - c2 as isize;
 
-    let increasing = iterate(0, |i| i + 1)
-        .map(move |i| {
-            r1.checked_add_signed(i * dr)
-                .zip(c1.checked_add_signed(i * dc))
-                .filter(|(r, c)| r < height && c < width)
-        })
-        .while_some();
+    let increasing = sequence_from_antenna((r1, c1).clone(), (dr, dc).clone(), bounds);
+    let decreasing = sequence_from_antenna((r2, c2), (-dr, -dc), bounds);
 
-    let decreasing = iterate(-1, |i| i - 1)
-        .map(move |i| {
-            r1.checked_add_signed(i * dr)
-                .zip(c1.checked_add_signed(i * dc))
-                .filter(|(r, c)| r < height && c < width)
-        })
-        .while_some();
-
-    increasing.chain(decreasing).collect()
+    increasing
+        .iter()
+        .chain(decreasing.iter())
+        .cloned()
+        .collect()
 }
 
 fn find_antinodes_for_frequency(
-    strategy: fn(&Coordinate, &Coordinate, &(usize, usize)) -> Vec<Coordinate>,
+    strategy: AntinodeStrategy,
     antenna: &Vec<Coordinate>,
     bounds: &(usize, usize),
 ) -> Vec<Coordinate> {
     antenna
         .iter()
         .tuple_combinations()
-        .flat_map(|(a1, a2)| strategy(a1, a2, bounds))
+        .flat_map(|(a1, a2)| strategy(*a1, *a2, bounds))
         .unique()
         .collect()
 }
 
-fn count_antinodes_for_map(
-    strategy: fn(&Coordinate, &Coordinate, &(usize, usize)) -> Vec<Coordinate>,
-    antenna_map: &AntennaMap,
-) -> usize {
+fn count_antinodes_for_map(strategy: AntinodeStrategy, antenna_map: &AntennaMap) -> usize {
     let bounds = (antenna_map.height, antenna_map.width);
     antenna_map
         .antenna
@@ -170,19 +176,19 @@ mod tests {
     #[test]
     fn can_find_antinodes_for_pair() {
         assert_contains_in_any_order(
-            find_antinodes_for_pair(&(3, 4), &(5, 5), &(12, 12)),
+            find_antinodes_for_pair((3, 4), (5, 5), &(12, 12)),
             vec![(1, 3), (7, 6)],
         );
         assert_contains_in_any_order(
-            find_antinodes_for_pair(&(4, 8), &(5, 5), &(12, 12)),
+            find_antinodes_for_pair((4, 8), (5, 5), &(12, 12)),
             vec![(6, 2), (3, 11)],
         );
         assert_contains_in_any_order(
-            find_antinodes_for_pair(&(4, 8), &(5, 5), &(10, 10)),
+            find_antinodes_for_pair((4, 8), (5, 5), &(10, 10)),
             vec![(6, 2)],
         );
         assert_contains_in_any_order(
-            find_antinodes_for_pair(&(1, 1), &(3, 3), &(10, 10)),
+            find_antinodes_for_pair((1, 1), (3, 3), &(10, 10)),
             vec![(5, 5)],
         );
     }
@@ -190,11 +196,11 @@ mod tests {
     #[test]
     fn can_find_antinodes_for_pair_with_resonant_harmonics() {
         assert_contains_in_any_order(
-            find_antinodes_for_pair_with_resonant_harmonics(&(2, 3), &(3, 5), &(10, 10)),
+            find_antinodes_for_pair_with_resonant_harmonics((2, 3), (3, 5), &(10, 10)),
             vec![(1, 1), (2, 3), (3, 5), (4, 7), (5, 9)],
         );
         assert_contains_in_any_order(
-            find_antinodes_for_pair_with_resonant_harmonics(&(4, 3), &(3, 5), &(10, 10)),
+            find_antinodes_for_pair_with_resonant_harmonics((4, 3), (3, 5), &(10, 10)),
             vec![(5, 1), (4, 3), (3, 5), (2, 7), (1, 9)],
         );
     }
