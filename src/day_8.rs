@@ -16,15 +16,12 @@ pub fn run() {
 
     println!(
         "There are {} unique antinodes",
-        count_antinodes_for_map(find_antinodes_for_pair, &antenna_map)
+        count_antinodes_for_map(&antenna_map, antinode_pair_sequence_modifier)
     );
 
     println!(
         "There are {} unique antinodes",
-        count_antinodes_for_map(
-            find_antinodes_for_pair_with_resonant_harmonics,
-            &antenna_map
-        )
+        count_antinodes_for_map(&antenna_map, resonant_harmonies_sequence_modifier)
     );
 }
 
@@ -58,7 +55,7 @@ fn parse_input(input: &String) -> AntennaMap {
     }
 }
 
-type AntinodeStrategy = fn(Coordinate, Coordinate, &(usize, usize)) -> Vec<Coordinate>;
+type SequenceModifier = fn(Vec<Coordinate>) -> Vec<Coordinate>;
 
 fn sequence_from_antenna(
     (r, c): Coordinate,
@@ -79,6 +76,7 @@ fn find_antinodes_for_pair(
     (r1, c1): Coordinate,
     (r2, c2): Coordinate,
     bounds: &(usize, usize),
+    sequence_modifier: SequenceModifier,
 ) -> Vec<Coordinate> {
     let dr = r1 as isize - r2 as isize;
     let dc = c1 as isize - c2 as isize;
@@ -86,52 +84,40 @@ fn find_antinodes_for_pair(
     let increasing = sequence_from_antenna((r1, c1).clone(), (dr, dc).clone(), bounds);
     let decreasing = sequence_from_antenna((r2, c2), (-dr, -dc), bounds);
 
-    increasing
-        .iter()
+    [sequence_modifier(increasing), sequence_modifier(decreasing)].concat()
+}
+
+fn antinode_pair_sequence_modifier(coordinate_sequence: Vec<Coordinate>) -> Vec<Coordinate> {
+    coordinate_sequence
+        .into_iter()
         .dropping(1)
         .take(1)
-        .chain(decreasing.iter().dropping(1).take(1))
-        .cloned()
         .collect()
 }
 
-fn find_antinodes_for_pair_with_resonant_harmonics(
-    (r1, c1): Coordinate,
-    (r2, c2): Coordinate,
-    bounds: &(usize, usize),
-) -> Vec<Coordinate> {
-    let dr = r1 as isize - r2 as isize;
-    let dc = c1 as isize - c2 as isize;
-
-    let increasing = sequence_from_antenna((r1, c1).clone(), (dr, dc).clone(), bounds);
-    let decreasing = sequence_from_antenna((r2, c2), (-dr, -dc), bounds);
-
-    increasing
-        .iter()
-        .chain(decreasing.iter())
-        .cloned()
-        .collect()
+fn resonant_harmonies_sequence_modifier(coordinate_sequence: Vec<Coordinate>) -> Vec<Coordinate> {
+    coordinate_sequence
 }
 
 fn find_antinodes_for_frequency(
-    strategy: AntinodeStrategy,
     antenna: &Vec<Coordinate>,
     bounds: &(usize, usize),
+    sequence_modifier: SequenceModifier,
 ) -> Vec<Coordinate> {
     antenna
         .iter()
         .tuple_combinations()
-        .flat_map(|(a1, a2)| strategy(*a1, *a2, bounds))
+        .flat_map(|(a1, a2)| find_antinodes_for_pair(*a1, *a2, bounds, sequence_modifier))
         .unique()
         .collect()
 }
 
-fn count_antinodes_for_map(strategy: AntinodeStrategy, antenna_map: &AntennaMap) -> usize {
+fn count_antinodes_for_map(antenna_map: &AntennaMap, sequence_modifier: SequenceModifier) -> usize {
     let bounds = (antenna_map.height, antenna_map.width);
     antenna_map
         .antenna
         .values()
-        .flat_map(|antenna| find_antinodes_for_frequency(strategy, antenna, &bounds))
+        .flat_map(|antenna| find_antinodes_for_frequency(antenna, &bounds, sequence_modifier))
         .unique()
         .count()
 }
@@ -176,19 +162,19 @@ mod tests {
     #[test]
     fn can_find_antinodes_for_pair() {
         assert_contains_in_any_order(
-            find_antinodes_for_pair((3, 4), (5, 5), &(12, 12)),
+            find_antinodes_for_pair((3, 4), (5, 5), &(12, 12), antinode_pair_sequence_modifier),
             vec![(1, 3), (7, 6)],
         );
         assert_contains_in_any_order(
-            find_antinodes_for_pair((4, 8), (5, 5), &(12, 12)),
+            find_antinodes_for_pair((4, 8), (5, 5), &(12, 12), antinode_pair_sequence_modifier),
             vec![(6, 2), (3, 11)],
         );
         assert_contains_in_any_order(
-            find_antinodes_for_pair((4, 8), (5, 5), &(10, 10)),
+            find_antinodes_for_pair((4, 8), (5, 5), &(10, 10), antinode_pair_sequence_modifier),
             vec![(6, 2)],
         );
         assert_contains_in_any_order(
-            find_antinodes_for_pair((1, 1), (3, 3), &(10, 10)),
+            find_antinodes_for_pair((1, 1), (3, 3), &(10, 10), antinode_pair_sequence_modifier),
             vec![(5, 5)],
         );
     }
@@ -196,11 +182,21 @@ mod tests {
     #[test]
     fn can_find_antinodes_for_pair_with_resonant_harmonics() {
         assert_contains_in_any_order(
-            find_antinodes_for_pair_with_resonant_harmonics((2, 3), (3, 5), &(10, 10)),
+            find_antinodes_for_pair(
+                (2, 3),
+                (3, 5),
+                &(10, 10),
+                resonant_harmonies_sequence_modifier,
+            ),
             vec![(1, 1), (2, 3), (3, 5), (4, 7), (5, 9)],
         );
         assert_contains_in_any_order(
-            find_antinodes_for_pair_with_resonant_harmonics((4, 3), (3, 5), &(10, 10)),
+            find_antinodes_for_pair(
+                (4, 3),
+                (3, 5),
+                &(10, 10),
+                resonant_harmonies_sequence_modifier,
+            ),
             vec![(5, 1), (4, 3), (3, 5), (2, 7), (1, 9)],
         );
     }
@@ -209,9 +205,9 @@ mod tests {
     fn can_find_antinodes_for_frequency() {
         assert_contains_in_any_order(
             find_antinodes_for_frequency(
-                find_antinodes_for_pair,
                 &vec![(3, 4), (4, 8), (5, 5)],
                 &(10, 10),
+                antinode_pair_sequence_modifier,
             ),
             vec![(1, 3), (7, 6), (6, 2), (2, 0)],
         );
@@ -221,9 +217,9 @@ mod tests {
     fn can_find_antinodes_for_frequency_with_resonant_harmonics() {
         assert_contains_in_any_order(
             find_antinodes_for_frequency(
-                find_antinodes_for_pair_with_resonant_harmonics,
                 &vec![(0, 0), (1, 3), (2, 1)],
                 &(10, 10),
+                resonant_harmonies_sequence_modifier,
             ),
             vec![
                 (0, 0),
@@ -242,14 +238,11 @@ mod tests {
     #[test]
     fn can_count_antinodes_for_map() {
         assert_eq!(
-            count_antinodes_for_map(find_antinodes_for_pair, &example_map()),
+            count_antinodes_for_map(&example_map(), antinode_pair_sequence_modifier),
             14
         );
         assert_eq!(
-            count_antinodes_for_map(
-                find_antinodes_for_pair_with_resonant_harmonics,
-                &example_map()
-            ),
+            count_antinodes_for_map(&example_map(), resonant_harmonies_sequence_modifier),
             34
         );
     }
