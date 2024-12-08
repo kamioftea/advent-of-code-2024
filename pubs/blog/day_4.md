@@ -59,7 +59,7 @@ XMAS.S
 }
 ```
 
-## Searching for \[the true meaning of] XMAS
+## Part 1 - Searching for \[the true meaning of] XMAS
 
 The ask is to find all instances of the word XMAS in the wordsearch, along either axis or either diagonal, either
 forwards or backwards. My thinking here is this can be broken down into:
