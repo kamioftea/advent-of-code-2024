@@ -2,7 +2,7 @@
 //!
 //!
 
-use itertools::Itertools;
+use itertools::{iterate, Itertools};
 use std::collections::HashMap;
 use std::fs;
 
@@ -16,7 +16,15 @@ pub fn run() {
 
     println!(
         "There are {} unique antinodes",
-        count_antinodes_for_map(&antenna_map)
+        count_antinodes_for_map(find_antinodes_for_pair, &antenna_map)
+    );
+
+    println!(
+        "There are {} unique antinodes",
+        count_antinodes_for_map(
+            find_antinodes_for_pair_with_resonant_harmonics,
+            &antenna_map
+        )
     );
 }
 
@@ -69,23 +77,55 @@ fn find_antinodes_for_pair(
     .collect()
 }
 
+fn find_antinodes_for_pair_with_resonant_harmonics(
+    &(r1, c1): &Coordinate,
+    &(r2, c2): &Coordinate,
+    (height, width): &(usize, usize),
+) -> Vec<Coordinate> {
+    let dr = r1 as isize - r2 as isize;
+    let dc = c1 as isize - c2 as isize;
+
+    let increasing = iterate(0, |i| i + 1)
+        .map(move |i| {
+            r1.checked_add_signed(i * dr)
+                .zip(c1.checked_add_signed(i * dc))
+                .filter(|(r, c)| r < height && c < width)
+        })
+        .while_some();
+
+    let decreasing = iterate(-1, |i| i - 1)
+        .map(move |i| {
+            r1.checked_add_signed(i * dr)
+                .zip(c1.checked_add_signed(i * dc))
+                .filter(|(r, c)| r < height && c < width)
+        })
+        .while_some();
+
+    increasing.chain(decreasing).collect()
+}
+
 fn find_antinodes_for_frequency(
+    strategy: fn(&Coordinate, &Coordinate, &(usize, usize)) -> Vec<Coordinate>,
     antenna: &Vec<Coordinate>,
     bounds: &(usize, usize),
 ) -> Vec<Coordinate> {
     antenna
         .iter()
         .tuple_combinations()
-        .flat_map(|(a1, a2)| find_antinodes_for_pair(a1, a2, bounds))
+        .flat_map(|(a1, a2)| strategy(a1, a2, bounds))
+        .unique()
         .collect()
 }
 
-fn count_antinodes_for_map(antenna_map: &AntennaMap) -> usize {
+fn count_antinodes_for_map(
+    strategy: fn(&Coordinate, &Coordinate, &(usize, usize)) -> Vec<Coordinate>,
+    antenna_map: &AntennaMap,
+) -> usize {
     let bounds = (antenna_map.height, antenna_map.width);
     antenna_map
         .antenna
         .values()
-        .flat_map(|antenna| find_antinodes_for_frequency(antenna, &bounds))
+        .flat_map(|antenna| find_antinodes_for_frequency(strategy, antenna, &bounds))
         .unique()
         .count()
 }
@@ -148,15 +188,63 @@ mod tests {
     }
 
     #[test]
+    fn can_find_antinodes_for_pair_with_resonant_harmonics() {
+        assert_contains_in_any_order(
+            find_antinodes_for_pair_with_resonant_harmonics(&(2, 3), &(3, 5), &(10, 10)),
+            vec![(1, 1), (2, 3), (3, 5), (4, 7), (5, 9)],
+        );
+        assert_contains_in_any_order(
+            find_antinodes_for_pair_with_resonant_harmonics(&(4, 3), &(3, 5), &(10, 10)),
+            vec![(5, 1), (4, 3), (3, 5), (2, 7), (1, 9)],
+        );
+    }
+
+    #[test]
     fn can_find_antinodes_for_frequency() {
         assert_contains_in_any_order(
-            find_antinodes_for_frequency(&vec![(3, 4), (4, 8), (5, 5)], &(10, 10)),
+            find_antinodes_for_frequency(
+                find_antinodes_for_pair,
+                &vec![(3, 4), (4, 8), (5, 5)],
+                &(10, 10),
+            ),
             vec![(1, 3), (7, 6), (6, 2), (2, 0)],
         );
     }
 
     #[test]
+    fn can_find_antinodes_for_frequency_with_resonant_harmonics() {
+        assert_contains_in_any_order(
+            find_antinodes_for_frequency(
+                find_antinodes_for_pair_with_resonant_harmonics,
+                &vec![(0, 0), (1, 3), (2, 1)],
+                &(10, 10),
+            ),
+            vec![
+                (0, 0),
+                (0, 5),
+                (1, 3),
+                (2, 1),
+                (2, 6),
+                (3, 9),
+                (4, 2),
+                (6, 3),
+                (8, 4),
+            ],
+        );
+    }
+
+    #[test]
     fn can_count_antinodes_for_map() {
-        assert_eq!(count_antinodes_for_map(&example_map()), 14);
+        assert_eq!(
+            count_antinodes_for_map(find_antinodes_for_pair, &example_map()),
+            14
+        );
+        assert_eq!(
+            count_antinodes_for_map(
+                find_antinodes_for_pair_with_resonant_harmonics,
+                &example_map()
+            ),
+            34
+        );
     }
 }
