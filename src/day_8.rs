@@ -1,6 +1,16 @@
 //! This is my solution for [Advent of Code - Day 8: _Resonant Collinearity_](https://adventofcode.com/2024/day/8)
 //!
+//! [`parse_input`] converts the input file to an [`AntennaMap`] which stores a [`HashMap`] of frequency to list of
+//! antenna coordinates, as well as the upper bounds of the grid.
 //!
+//! [`count_antinodes_for_map`] solves both parts, breaking the work down into calling
+//! [`find_antinodes_for_frequency`] for each frequency in the map. This in turn uses [`find_antinodes_for_pair`] on
+//! each combination of antenna in the frequency group.
+//!
+//! [`sequence_from_antenna`] extrapolates the line defined by a pair of antenna, in one direction and
+//! [`antinode_pair_sequence_modifier`] and [`resonant_harmonies_sequence_modifier`] handle selecting the right
+//! node(s) for part 1 and 2 respectively. [`find_antinodes_for_pair`] uses [`sequence_from_antenna`] starting from
+//! each node in the pair.
 
 use itertools::{iterate, Itertools};
 use std::collections::HashMap;
@@ -25,8 +35,10 @@ pub fn run() {
     );
 }
 
+/// A coordinate on the grid
 type Coordinate = (usize, usize);
 
+/// Represent the puzzle grid by its upper bounds and the position of antenna grouped by frequency
 #[derive(Eq, PartialEq, Debug)]
 struct AntennaMap {
     height: usize,
@@ -34,6 +46,7 @@ struct AntennaMap {
     antenna: HashMap<char, Vec<Coordinate>>,
 }
 
+/// Converts the text input into the internal representation
 fn parse_input(input: &String) -> AntennaMap {
     let mut lines = input.lines();
     let width = lines.next().unwrap().len();
@@ -55,8 +68,11 @@ fn parse_input(input: &String) -> AntennaMap {
     }
 }
 
+/// This differentiates the two parts by allowing outside control over which nodes are selected when extrapolating
+/// the line between two antenna
 type SequenceModifier = fn(Vec<Coordinate>) -> Vec<Coordinate>;
 
+/// Extrapolate from a point along a delta whilst it's within the bounds of the antenna map
 fn sequence_from_antenna(
     (r, c): Coordinate,
     (dr, dc): (isize, isize),
@@ -72,6 +88,8 @@ fn sequence_from_antenna(
         .collect()
 }
 
+/// Fine the antinodes by determining the coordinate delta between two antinodes, extrapolating the line from both
+/// ends, applying the SequenceModifier relevant to the part being solved.
 fn find_antinodes_for_pair(
     (r1, c1): Coordinate,
     (r2, c2): Coordinate,
@@ -87,6 +105,7 @@ fn find_antinodes_for_pair(
     [sequence_modifier(increasing), sequence_modifier(decreasing)].concat()
 }
 
+/// Part 1 - Select only the first node beyond the origin
 fn antinode_pair_sequence_modifier(coordinate_sequence: Vec<Coordinate>) -> Vec<Coordinate> {
     coordinate_sequence
         .into_iter()
@@ -95,10 +114,12 @@ fn antinode_pair_sequence_modifier(coordinate_sequence: Vec<Coordinate>) -> Vec<
         .collect()
 }
 
+/// Part 2 - Select all nodes including the origin - essentially the identity function
 fn resonant_harmonies_sequence_modifier(coordinate_sequence: Vec<Coordinate>) -> Vec<Coordinate> {
     coordinate_sequence
 }
 
+/// Combine all pairs of antenna in a frequency and return the unique antinodes
 fn find_antinodes_for_frequency(
     antenna: &Vec<Coordinate>,
     bounds: &(usize, usize),
@@ -112,6 +133,7 @@ fn find_antinodes_for_frequency(
         .collect()
 }
 
+/// For all frequencies un the map, find all the antinodes, then count unique coordinates.
 fn count_antinodes_for_map(antenna_map: &AntennaMap, sequence_modifier: SequenceModifier) -> usize {
     let bounds = (antenna_map.height, antenna_map.width);
     antenna_map
