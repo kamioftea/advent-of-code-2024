@@ -31,16 +31,6 @@ struct DiskPointer {
     size: u8,
 }
 
-impl DiskPointer {
-    fn new(index: usize, is_file: bool, size: u8) -> DiskPointer {
-        DiskPointer {
-            index,
-            is_file,
-            size,
-        }
-    }
-}
-
 type Block = (usize, usize);
 
 fn parse_input(input: &String) -> Vec<u8> {
@@ -52,51 +42,59 @@ fn parse_input(input: &String) -> Vec<u8> {
 }
 
 fn get_disk_pointers(disk_map: &Vec<u8>) -> (DiskPointer, DiskPointer) {
-    let start = DiskPointer::new(0, true, disk_map[0]);
-    let end_index = disk_map.len() - 1;
-    let end = DiskPointer::new(end_index, end_index % 2 == 0, disk_map[end_index]);
+    let head = DiskPointer {
+        index: 0,
+        is_file: true,
+        size: disk_map[0],
+    };
+    let tail_index = disk_map.len() - 1;
+    let tail = DiskPointer {
+        index: tail_index,
+        is_file: tail_index % 2 == 0,
+        size: disk_map[tail_index],
+    };
 
-    (start, end)
+    (head, tail)
 }
 
 fn disk_blocks_fragmented(disk_map: &Vec<u8>) -> Vec<Block> {
     let mut blocks = Vec::new();
     let mut pos = 0usize;
-    let (mut start, mut end) = get_disk_pointers(&disk_map);
+    let (mut head, mut tail) = get_disk_pointers(&disk_map);
 
-    while start.index < end.index {
-        if start.is_file {
-            for _ in 0..start.size {
-                blocks.push((pos, start.index / 2));
+    while head.index < tail.index {
+        if head.is_file {
+            for _ in 0..head.size {
+                blocks.push((pos, head.index / 2));
                 pos += 1;
             }
         } else {
-            let mut to_fill = start.size;
+            let mut to_fill = head.size;
             while to_fill > 0 {
-                let to_take = to_fill.min(end.size);
+                let to_take = to_fill.min(tail.size);
                 for _ in 0..to_take {
-                    blocks.push((pos, end.index / 2));
+                    blocks.push((pos, tail.index / 2));
                     pos += 1;
                 }
 
                 to_fill -= to_take;
-                end.size -= to_take;
+                tail.size -= to_take;
 
-                if end.size == 0 {
-                    end.index -= 2;
-                    end.size = disk_map[end.index];
+                if tail.size == 0 {
+                    tail.index -= 2;
+                    tail.size = disk_map[tail.index];
                 }
             }
         }
 
-        start.index = start.index + 1;
-        start.is_file = !start.is_file;
-        start.size = disk_map[start.index]
+        head.index = head.index + 1;
+        head.is_file = !head.is_file;
+        head.size = disk_map[head.index]
     }
 
-    if start.index == end.index {
-        for _ in 0..end.size {
-            blocks.push((pos, end.index / 2));
+    if head.index == tail.index {
+        for _ in 0..tail.size {
+            blocks.push((pos, tail.index / 2));
             pos += 1;
         }
     }
@@ -183,10 +181,10 @@ mod tests {
 
     #[test]
     fn can_build_disk_pointers() {
-        let (start, end) = get_disk_pointers(&example_disk());
+        let (head, tail) = get_disk_pointers(&example_disk());
 
         assert_eq!(
-            start,
+            head,
             DiskPointer {
                 index: 0,
                 is_file: true,
@@ -195,7 +193,7 @@ mod tests {
         );
 
         assert_eq!(
-            end,
+            tail,
             DiskPointer {
                 index: 18,
                 is_file: true,
