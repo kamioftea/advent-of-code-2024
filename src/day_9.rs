@@ -16,12 +16,12 @@ pub fn run() {
 
     println!(
         "The checksum is {}",
-        calculate_checksum(&disk_map, disk_files_fragmented)
+        calculate_checksum(&disk_map, fill_space_with_fragmentation)
     );
 
     println!(
         "The checksum is {}",
-        calculate_checksum(&disk_map, disk_files_unfragmented)
+        calculate_checksum(&disk_map, fill_space_without_fragmentation)
     );
 }
 
@@ -91,36 +91,27 @@ fn parse_input(input: &String) -> VecDeque<DiskUsage> {
         .collect()
 }
 
-fn disk_files_fragmented(disk_map: &VecDeque<DiskUsage>) -> Vec<File> {
+type SpaceFiller = fn(&mut Vec<File>, &mut VecDeque<DiskUsage>, Space, File) -> ();
+
+fn pack_files(disk_map: &VecDeque<DiskUsage>, space_filler: SpaceFiller) -> Vec<File> {
     let mut files = Vec::new();
     let mut usage = disk_map.clone();
 
     while let Some(&front) = usage.front() {
         match front {
+            // A file at the front is in its final position
             FILE(file) => {
                 usage.pop_front();
                 files.push(file);
             }
+            // A Space should be filled from the back
             SPACE(space) => {
                 if let Some(FILE(file)) = usage.pop_back() {
-                    usage.pop_front();
-                    if file.size < space.size {
-                        usage.push_front(DiskUsage::new_space(
-                            space.pos + file.size as usize,
-                            space.size - file.size,
-                        ));
-                    }
-
-                    files.push(File::new(file.id, space.pos, file.size.min(space.size)));
-
-                    if file.size > space.size {
-                        usage.push_back(DiskUsage::new_file(
-                            file.id,
-                            file.pos,
-                            file.size - space.size,
-                        ))
-                    }
+                    space_filler(&mut files, &mut usage, space, file);
                 }
+                // Else go try the outer loop again -
+                // - Some(space) has been consumed from the back
+                // - None will also exit the outer loop
             }
         }
     }
@@ -128,56 +119,75 @@ fn disk_files_fragmented(disk_map: &VecDeque<DiskUsage>) -> Vec<File> {
     files
 }
 
-fn disk_files_unfragmented(disk_map: &VecDeque<DiskUsage>) -> Vec<File> {
-    let mut files = Vec::new();
-    let mut usage = disk_map.clone();
+fn fill_space_with_fragmentation(
+    files: &mut Vec<File>,
+    usage: &mut VecDeque<DiskUsage>,
+    space: Space,
+    file: File,
+) {
+    // consume the space at the front
+    usage.pop_front();
 
-    while let Some(&front) = usage.front() {
-        match front {
-            FILE(file) => {
-                usage.pop_front();
+    // A file being moved will be in its final position
+    files.push(File::new(file.id, space.pos, file.size.min(space.size)));
+
+    if file.size < space.size {
+        // return remaining space to the front
+        usage.push_front(DiskUsage::new_space(
+            space.pos + file.size as usize,
+            space.size - file.size,
+        ));
+    } else if file.size > space.size {
+        // return remainder of file to the back
+        usage.push_back(DiskUsage::new_file(
+            file.id,
+            file.pos,
+            file.size - space.size,
+        ))
+    }
+}
+
+fn fill_space_without_fragmentation(
+    files: &mut Vec<File>,
+    usage: &mut VecDeque<DiskUsage>,
+    _space: Space,
+    file: File,
+) {
+    // Find a large enough space from the front iff possible
+    // Keep a stack of unused Usages to restore once done
+    let mut stack = Vec::new();
+    loop {
+        let next = usage.pop_front();
+        match next {
+            // Found a space
+            Some(SPACE(space)) if space.size >= file.size => {
+                // File now in its final position
+                files.push(File::new(file.id, space.pos, file.size));
+                if space.size > file.size {
+                    // Return remaining space
+                    usage.push_front(DiskUsage::new_space(
+                        space.pos + file.size as usize,
+                        space.size - file.size,
+                    ))
+                }
+                break;
+            }
+            Some(usage) => stack.push(usage),
+            // File won't fit, leave it in place
+            None => {
                 files.push(file);
-            }
-            SPACE(_) => {
-                if let Some(FILE(file)) = usage.pop_back() {
-                    let mut stack = Vec::new();
-                    loop {
-                        let next = usage.pop_front();
-                        match next {
-                            Some(SPACE(space)) if space.size >= file.size => {
-                                files.push(File::new(file.id, space.pos, file.size));
-                                if space.size > file.size {
-                                    usage.push_front(DiskUsage::new_space(
-                                        space.pos + file.size as usize,
-                                        space.size - file.size,
-                                    ))
-                                }
-                                break;
-                            }
-                            Some(usage) => stack.push(usage),
-                            None => {
-                                files.push(file);
-                                break;
-                            }
-                        }
-                    }
-
-                    while let Some(rewind) = stack.pop() {
-                        usage.push_front(rewind);
-                    }
-                }
+                break;
             }
         }
     }
 
-    files
+    while let Some(rewind) = stack.pop() {
+        usage.push_front(rewind);
+    }
 }
 
-fn calculate_checksum(
-    disk_map: &VecDeque<DiskUsage>,
-    strategy: fn(&VecDeque<DiskUsage>) -> Vec<File>,
-) -> usize {
-    strategy(disk_map)
+fn calculate_checksum(disk_map: &VecDeque<DiskUsage>, space_filler: SpaceFiller) -> usize {
+    pack_files(disk_map, space_filler)
         .iter()
         .flat_map(
             |&File {
@@ -229,7 +239,7 @@ mod tests {
     #[test]
     fn can_generate_fragmented_blocks() {
         assert_eq!(
-            disk_files_fragmented(&example_disk()),
+            pack_files(&example_disk(), fill_space_with_fragmentation),
             vec![
                 File::new(0, 0, 2),
                 File::new(9, 2, 2),
@@ -252,7 +262,7 @@ mod tests {
     #[test]
     fn can_calculate_checksum_fragmented() {
         assert_eq!(
-            calculate_checksum(&example_disk(), disk_files_fragmented),
+            calculate_checksum(&example_disk(), fill_space_with_fragmentation),
             1928
         )
     }
@@ -260,7 +270,7 @@ mod tests {
     #[test]
     fn can_generate_unfragmented_blocks() {
         assert_contains_in_any_order(
-            disk_files_unfragmented(&example_disk()),
+            pack_files(&example_disk(), fill_space_without_fragmentation),
             vec![
                 File::new(0, 0, 2),
                 File::new(9, 2, 2),
@@ -279,7 +289,7 @@ mod tests {
     #[test]
     fn can_calculate_checksum_unfragmented() {
         assert_eq!(
-            calculate_checksum(&example_disk(), disk_files_unfragmented),
+            calculate_checksum(&example_disk(), fill_space_without_fragmentation),
             2858
         )
     }
