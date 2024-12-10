@@ -1,6 +1,11 @@
 //! This is my solution for [Advent of Code - Day 9: _Disk Fragmenter_](https://adventofcode.com/2024/day/9)
 //!
+//! [`parse_input`] Marks each of the entries as a [`FILE`] or [`SPACE`], along with caching their
+//! position on disk, and the id of the files.
 //!
+//! [`calculate_checksum`] solves the puzzle, delegating to [`pack_files`] which calculates the final position of the
+//! files. [`fill_space_with_fragmentation`] Is the logic for filling in disk space for part 1,
+//! [`fill_space_without_fragmentation`] for part 2.
 
 use std::collections::VecDeque;
 use std::fs;
@@ -25,6 +30,7 @@ pub fn run() {
     );
 }
 
+/// A file on disk
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 struct File {
     id: usize,
@@ -38,12 +44,14 @@ impl File {
     }
 }
 
+/// A space on disk
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 struct Space {
     pos: usize,
     size: u8,
 }
 
+/// An enum to union both types of disk usage
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 enum DiskUsage {
     FILE(File),
@@ -51,14 +59,17 @@ enum DiskUsage {
 }
 
 impl DiskUsage {
+    /// A new file wrapped in the union type
     fn new_file(id: usize, pos: usize, size: u8) -> DiskUsage {
         FILE(File { id, pos, size })
     }
 
+    /// A new space wrapped in the union type
     fn new_space(pos: usize, size: u8) -> DiskUsage {
         SPACE(Space { pos, size })
     }
 
+    /// Access size regardless of usage type
     fn size(&self) -> u8 {
         match self {
             FILE(file) => file.size,
@@ -67,6 +78,7 @@ impl DiskUsage {
     }
 }
 
+/// Turn input into alternating file/space entries. Filtering out any with size 0
 fn parse_input(input: &String) -> VecDeque<DiskUsage> {
     let mut is_file = true;
     let mut pos = 0;
@@ -91,34 +103,15 @@ fn parse_input(input: &String) -> VecDeque<DiskUsage> {
         .collect()
 }
 
+/// This represents the difference between the parts.
+///
+/// `&mut Vec<File>`: the output file list
+/// `&mut VecDeque<DiskUsage>`: the unprocessed entries in the disk usage map
+/// `Space`: The leftmost space to fill
+/// `File`: The file to be moved into a space
 type SpaceFiller = fn(&mut Vec<File>, &mut VecDeque<DiskUsage>, Space, File) -> ();
 
-fn pack_files(disk_map: &VecDeque<DiskUsage>, space_filler: SpaceFiller) -> Vec<File> {
-    let mut files = Vec::new();
-    let mut usage = disk_map.clone();
-
-    while let Some(&front) = usage.front() {
-        match front {
-            // A file at the front is in its final position
-            FILE(file) => {
-                usage.pop_front();
-                files.push(file);
-            }
-            // A Space should be filled from the back
-            SPACE(space) => {
-                if let Some(FILE(file)) = usage.pop_back() {
-                    space_filler(&mut files, &mut usage, space, file);
-                }
-                // Else go try the outer loop again -
-                // - Some(space) has been consumed from the back
-                // - None will also exit the outer loop
-            }
-        }
-    }
-
-    files
-}
-
+/// Part 1 space filler - split files to fully fill in every hole
 fn fill_space_with_fragmentation(
     files: &mut Vec<File>,
     usage: &mut VecDeque<DiskUsage>,
@@ -147,6 +140,9 @@ fn fill_space_with_fragmentation(
     }
 }
 
+/// Part 2 space filler - only move files into spaces they fit
+///
+/// This ignores the passed in space as the space to fill needs to be searched for.
 fn fill_space_without_fragmentation(
     files: &mut Vec<File>,
     usage: &mut VecDeque<DiskUsage>,
@@ -186,6 +182,35 @@ fn fill_space_without_fragmentation(
     }
 }
 
+/// The common logic for reading from both ends of the disk usage map, outputting files as their final position
+/// becomes known.
+fn pack_files(disk_map: &VecDeque<DiskUsage>, space_filler: SpaceFiller) -> Vec<File> {
+    let mut files = Vec::new();
+    let mut usage = disk_map.clone();
+
+    while let Some(&front) = usage.front() {
+        match front {
+            // A file at the front is in its final position
+            FILE(file) => {
+                usage.pop_front();
+                files.push(file);
+            }
+            // A Space should be filled from the back
+            SPACE(space) => {
+                if let Some(FILE(file)) = usage.pop_back() {
+                    space_filler(&mut files, &mut usage, space, file);
+                }
+                // Else go try the outer loop again -
+                // - Some(space) has been consumed from the back
+                // - None will also exit the outer loop
+            }
+        }
+    }
+
+    files
+}
+
+/// Reduces the list of packed files to the puzzle solution
 fn calculate_checksum(disk_map: &VecDeque<DiskUsage>, space_filler: SpaceFiller) -> usize {
     pack_files(disk_map, space_filler)
         .iter()

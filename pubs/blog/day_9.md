@@ -370,3 +370,235 @@ fn can_calculate_checksum_unfragmented() {
 }
 ```
 
+## Refactoring and reworking
+
+When refactoring part 1 to use two lists, files and spaces, it seems like it would be easier to use a single list
+with enums. So I have a go at rewriting it like that. I end up wrapping a value type within each enum variant so
+that I can still have a list of just files.
+
+```rust
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+struct File {
+    id: usize,
+    pos: usize,
+    size: u8,
+}
+
+impl File {
+    fn new(id: usize, pos: usize, size: u8) -> File {
+        File { id, pos, size }
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+struct Space {
+    pos: usize,
+    size: u8,
+}
+
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+enum DiskUsage {
+    FILE(File),
+    SPACE(Space),
+}
+
+impl DiskUsage {
+    fn new_file(id: usize, pos: usize, size: u8) -> DiskUsage {
+        FILE(File { id, pos, size })
+    }
+    
+    fn new_space(pos: usize, size: u8) -> DiskUsage {
+        SPACE(Space { pos, size })
+    }
+    
+    fn size(&self) -> u8 {
+        match self {
+            FILE(file) => file.size,
+            SPACE(space) => space.size,
+        }
+    }
+}
+```
+
+I move building that into `parse_input`
+
+```rust
+fn parse_input(input: &String) -> VecDeque<DiskUsage> {
+    let mut is_file = true;
+    let mut pos = 0;
+    
+    input
+        .chars()
+        .flat_map(|char| char.to_digit(10))
+        .enumerate()
+        .map(|(idx, size)| {
+            let usage = if is_file {
+                DiskUsage::new_file(idx / 2, pos, size as u8)
+            } else {
+                DiskUsage::new_space(pos, size as u8)
+            };
+            
+            is_file = !is_file;
+            pos += size as usize;
+            
+            usage
+        })
+        .filter(|usage| usage.size() > 0)
+        .collect()
+}
+```
+
+Then I rewrite `disk_blocks_fragmented` to build up a list of `Files` by first peeking at the next entry from the front
+of the list.
+
+- If it's a file, that's its final position, so I can consume it and push it to the output list.
+- If it's a space, take the next entry from the back,
+    - If that is a file, then output as much as will fit as an output file, put any remaining space/file back in the
+      disk map for later use
+    - Otherwise, ignore it. The outer loop then tries again and will get the file now at the back next time
+
+I then rewrite `disk_blocks_unfragmented`, and end up with a very similar structure, the only place that differs is
+where to put the file from the back when looking to fill a space. After a few rounds of refactoring I end up pulling
+the SpaceFiller out into a common type, and extract that bit of the `disk_blocks_*` functions.
+
+```rust
+/// This represents the difference between the parts.
+/// &mut Vec<File>: the output file list
+/// &mut VecDeque<DiskUsage>: the unprocessed entries in the disk usage map
+/// Space: The leftmost space to fill
+/// File: The file to be moved into a space
+type SpaceFiller = fn(&mut Vec<File>, &mut VecDeque<DiskUsage>, Space, File) -> ();
+
+fn fill_space_with_fragmentation(
+    files: &mut Vec<File>,
+    usage: &mut VecDeque<DiskUsage>,
+    space: Space,
+    file: File,
+) {
+    // consume the space at the front
+    usage.pop_front();
+    
+    // A file being moved will be in its final position
+    files.push(File::new(file.id, space.pos, file.size.min(space.size)));
+    
+    if file.size < space.size {
+        // return remaining space to the front
+        usage.push_front(DiskUsage::new_space(
+            space.pos + file.size as usize,
+            space.size - file.size,
+        ));
+    } else if file.size > space.size {
+        // return remainder of file to the back
+        usage.push_back(DiskUsage::new_file(
+            file.id,
+            file.pos,
+            file.size - space.size,
+        ))
+    }
+}
+
+fn fill_space_without_fragmentation(
+    files: &mut Vec<File>,
+    usage: &mut VecDeque<DiskUsage>,
+    _space: Space,
+    file: File,
+) {
+    // Find a large enough space from the front iff possible
+    // Keep a stack of unused Usages to restore once done
+    let mut stack = Vec::new();
+    loop {
+        let next = usage.pop_front();
+        match next {
+            // Found a space
+            Some(SPACE(space)) if space.size >= file.size => {
+                // File now in its final position
+                files.push(File::new(file.id, space.pos, file.size));
+                if space.size > file.size {
+                    // Return remaining space
+                    usage.push_front(DiskUsage::new_space(
+                        space.pos + file.size as usize,
+                        space.size - file.size,
+                    ))
+                }
+                break;
+            }
+            Some(usage) => stack.push(usage),
+            // File won't fit, leave it in place
+            None => {
+                files.push(file);
+                break;
+            }
+        }
+    }
+    
+    while let Some(rewind) = stack.pop() {
+        usage.push_front(rewind);
+    }
+}
+```
+
+These still gnarly and hard to follow, but I think that is inherent complexity of doing this in an efficient way. At
+least this way, the complexity is mostly isolated to these two functions.
+
+That done, there is now a common function for packing the files.
+
+```rust
+fn pack_files(
+    disk_map: &VecDeque<DiskUsage>,
+    space_filler: SpaceFiller
+) -> Vec<File> {
+    let mut files = Vec::new();
+    let mut usage = disk_map.clone();
+    
+    while let Some(&front) = usage.front() {
+        match front {
+            // A file at the front is in its final position
+            FILE(file) => {
+                usage.pop_front();
+                files.push(file);
+            }
+            // A Space should be filled from the back
+            SPACE(space) => {
+                if let Some(FILE(file)) = usage.pop_back() {
+                    space_filler(&mut files, &mut usage, space, file);
+                }
+                // Else go try the outer loop again -
+                // - Some(space) has been consumed from the back
+                // - None will also exit the outer loop
+            }
+        }
+    }
+    
+    files
+}
+```
+
+Note this has also been refactored to return one entry per file, so that I'm not generating and passing around a
+huge list of blocks. Expanding those can be done in the checksum.
+
+```rust
+fn calculate_checksum(
+    disk_map: &VecDeque<DiskUsage>,
+    space_filler: SpaceFiller
+) -> usize {
+    pack_files(disk_map, space_filler)
+        .iter()
+        .flat_map(
+            |&File {
+                id,
+                pos: start,
+                size,
+            }| (start..(start + size as usize)).map(move |pos| pos * id),
+        )
+        .sum()
+}
+```
+
+The tests need some sweeping changes to account for the various new function signatures, but they don't change their
+behaviour.
+
+## Wrap up
+
+The refactoring is definitely quicker ~350ms to ~80ms which is close to 4x faster. The code is not the easiest to
+follow, but I think that is partially due to complexity. It does still feel like there should be a cleaner way to
+represent this, but it'll do.
