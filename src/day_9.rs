@@ -2,8 +2,9 @@
 //!
 //!
 
-use itertools::Itertools;
+use std::collections::VecDeque;
 use std::fs;
+use DiskUsage::*;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
 ///
@@ -15,152 +16,177 @@ pub fn run() {
 
     println!(
         "The checksum is {}",
-        calculate_checksum(&disk_map, disk_blocks_fragmented)
+        calculate_checksum(&disk_map, disk_files_fragmented)
     );
 
     println!(
         "The checksum is {}",
-        calculate_checksum(&disk_map, disk_blocks_unfragmented)
+        calculate_checksum(&disk_map, disk_files_unfragmented)
     );
 }
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
-struct DiskPointer {
-    index: usize,
-    is_file: bool,
+struct File {
+    id: usize,
+    pos: usize,
     size: u8,
 }
 
-type Block = (usize, usize);
+impl File {
+    fn new(id: usize, pos: usize, size: u8) -> File {
+        File { id, pos, size }
+    }
+}
 
-fn parse_input(input: &String) -> Vec<u8> {
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+struct Space {
+    pos: usize,
+    size: u8,
+}
+
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+enum DiskUsage {
+    FILE(File),
+    SPACE(Space),
+}
+
+impl DiskUsage {
+    fn new_file(id: usize, pos: usize, size: u8) -> DiskUsage {
+        FILE(File { id, pos, size })
+    }
+
+    fn new_space(pos: usize, size: u8) -> DiskUsage {
+        SPACE(Space { pos, size })
+    }
+
+    fn size(&self) -> u8 {
+        match self {
+            FILE(file) => file.size,
+            SPACE(space) => space.size,
+        }
+    }
+}
+
+fn parse_input(input: &String) -> VecDeque<DiskUsage> {
+    let mut is_file = true;
+    let mut pos = 0;
+
     input
         .chars()
         .flat_map(|char| char.to_digit(10))
-        .map(|num| num as u8)
+        .enumerate()
+        .map(|(idx, size)| {
+            let usage = if is_file {
+                DiskUsage::new_file(idx / 2, pos, size as u8)
+            } else {
+                DiskUsage::new_space(pos, size as u8)
+            };
+
+            is_file = !is_file;
+            pos += size as usize;
+
+            usage
+        })
+        .filter(|usage| usage.size() > 0)
         .collect()
 }
 
-fn get_disk_pointers(disk_map: &Vec<u8>) -> (DiskPointer, DiskPointer) {
-    let head = DiskPointer {
-        index: 0,
-        is_file: true,
-        size: disk_map[0],
-    };
-    let tail_index = disk_map.len() - 1;
-    let tail = DiskPointer {
-        index: tail_index,
-        is_file: tail_index % 2 == 0,
-        size: disk_map[tail_index],
-    };
-
-    (head, tail)
-}
-
-fn disk_blocks_fragmented(disk_map: &Vec<u8>) -> Vec<Block> {
-    let mut blocks = Vec::new();
-    let mut pos = 0usize;
-    let (mut head, mut tail) = get_disk_pointers(&disk_map);
-
-    while head.index < tail.index {
-        if head.is_file {
-            for _ in 0..head.size {
-                blocks.push((pos, head.index / 2));
-                pos += 1;
-            }
-        } else {
-            let mut to_fill = head.size;
-            while to_fill > 0 {
-                let to_take = to_fill.min(tail.size);
-                for _ in 0..to_take {
-                    blocks.push((pos, tail.index / 2));
-                    pos += 1;
-                }
-
-                to_fill -= to_take;
-                tail.size -= to_take;
-
-                if tail.size == 0 {
-                    tail.index -= 2;
-                    tail.size = disk_map[tail.index];
-                }
-            }
-        }
-
-        head.index = head.index + 1;
-        head.is_file = !head.is_file;
-        head.size = disk_map[head.index]
-    }
-
-    if head.index == tail.index {
-        for _ in 0..tail.size {
-            blocks.push((pos, tail.index / 2));
-            pos += 1;
-        }
-    }
-
-    blocks
-}
-
-fn get_usage(disk_map: &Vec<u8>) -> (Vec<(usize, usize, u8)>, Vec<(usize, u8)>) {
+fn disk_files_fragmented(disk_map: &VecDeque<DiskUsage>) -> Vec<File> {
     let mut files = Vec::new();
-    let mut free_space = Vec::new();
-    let mut pos = 0usize;
+    let mut usage = disk_map.clone();
 
-    disk_map
-        .iter()
-        .tuples()
-        .enumerate()
-        .for_each(|(idx, (&file, &free))| {
-            if file > 0 {
-                files.push((pos, idx, file));
-                pos += file as usize;
+    while let Some(&front) = usage.front() {
+        match front {
+            FILE(file) => {
+                usage.pop_front();
+                files.push(file);
             }
+            SPACE(space) => {
+                if let Some(FILE(file)) = usage.pop_back() {
+                    usage.pop_front();
+                    if file.size < space.size {
+                        usage.push_front(DiskUsage::new_space(
+                            space.pos + file.size as usize,
+                            space.size - file.size,
+                        ));
+                    }
 
-            if free > 0 {
-                free_space.push((pos, free));
-                pos += free as usize;
-            }
-        });
+                    files.push(File::new(file.id, space.pos, file.size.min(space.size)));
 
-    if disk_map.len() % 2 == 1 {
-        files.push((pos, disk_map.len() / 2, disk_map[disk_map.len() - 1]));
-    }
-
-    (files, free_space)
-}
-
-fn disk_blocks_unfragmented(disk_map: &Vec<u8>) -> Vec<Block> {
-    let mut blocks = Vec::new();
-    let (files, mut free_space) = get_usage(&disk_map);
-
-    for (file_pos, file_idx, file_size) in files.into_iter().rev() {
-        if let Some((space_idx, &(space_pos, space_size))) = free_space
-            .iter()
-            .enumerate()
-            .find(|(_, &(space_pos, space_size))| space_size >= file_size && space_pos < file_pos)
-        {
-            for i in 0..file_size as usize {
-                blocks.push((space_pos + i, file_idx));
-            }
-            if space_size > file_size {
-                let space = free_space.get_mut(space_idx).unwrap();
-                *space = (space_pos + file_size as usize, space_size - file_size);
-            } else {
-                free_space.remove(space_idx);
-            }
-        } else {
-            for i in 0..file_size as usize {
-                blocks.push((file_pos + i, file_idx));
+                    if file.size > space.size {
+                        usage.push_back(DiskUsage::new_file(
+                            file.id,
+                            file.pos,
+                            file.size - space.size,
+                        ))
+                    }
+                }
             }
         }
     }
 
-    blocks
+    files
 }
 
-fn calculate_checksum(disk_map: &Vec<u8>, strategy: fn(&Vec<u8>) -> Vec<Block>) -> usize {
-    strategy(disk_map).iter().map(|(pos, id)| pos * id).sum()
+fn disk_files_unfragmented(disk_map: &VecDeque<DiskUsage>) -> Vec<File> {
+    let mut files = Vec::new();
+    let mut usage = disk_map.clone();
+
+    while let Some(&front) = usage.front() {
+        match front {
+            FILE(file) => {
+                usage.pop_front();
+                files.push(file);
+            }
+            SPACE(_) => {
+                if let Some(FILE(file)) = usage.pop_back() {
+                    let mut stack = Vec::new();
+                    loop {
+                        let next = usage.pop_front();
+                        match next {
+                            Some(SPACE(space)) if space.size >= file.size => {
+                                files.push(File::new(file.id, space.pos, file.size));
+                                if space.size > file.size {
+                                    usage.push_front(DiskUsage::new_space(
+                                        space.pos + file.size as usize,
+                                        space.size - file.size,
+                                    ))
+                                }
+                                break;
+                            }
+                            Some(usage) => stack.push(usage),
+                            None => {
+                                files.push(file);
+                                break;
+                            }
+                        }
+                    }
+
+                    while let Some(rewind) = stack.pop() {
+                        usage.push_front(rewind);
+                    }
+                }
+            }
+        }
+    }
+
+    files
+}
+
+fn calculate_checksum(
+    disk_map: &VecDeque<DiskUsage>,
+    strategy: fn(&VecDeque<DiskUsage>) -> Vec<File>,
+) -> usize {
+    strategy(disk_map)
+        .iter()
+        .flat_map(
+            |&File {
+                 id,
+                 pos: start,
+                 size,
+             }| (start..(start + size as usize)).map(move |pos| pos * id),
+        )
+        .sum()
 }
 
 #[cfg(test)]
@@ -168,8 +194,29 @@ mod tests {
     use crate::day_9::*;
     use crate::helpers::test::assert_contains_in_any_order;
     
-    fn example_disk() -> Vec<u8> {
-        vec![2, 3, 3, 3, 1, 3, 3, 1, 2, 1, 4, 1, 4, 1, 3, 1, 4, 0, 2]
+    fn example_disk() -> VecDeque<DiskUsage> {
+        vec![
+            DiskUsage::new_file(0, 0, 2),
+            DiskUsage::new_space(2, 3),
+            DiskUsage::new_file(1, 5, 3),
+            DiskUsage::new_space(8, 3),
+            DiskUsage::new_file(2, 11, 1),
+            DiskUsage::new_space(12, 3),
+            DiskUsage::new_file(3, 15, 3),
+            DiskUsage::new_space(18, 1),
+            DiskUsage::new_file(4, 19, 2),
+            DiskUsage::new_space(21, 1),
+            DiskUsage::new_file(5, 22, 4),
+            DiskUsage::new_space(26, 1),
+            DiskUsage::new_file(6, 27, 4),
+            DiskUsage::new_space(31, 1),
+            DiskUsage::new_file(7, 32, 3),
+            DiskUsage::new_space(35, 1),
+            DiskUsage::new_file(8, 36, 4),
+            DiskUsage::new_file(9, 40, 2),
+        ]
+        .into_iter()
+        .collect()
     }
 
     #[test]
@@ -180,61 +227,24 @@ mod tests {
     }
 
     #[test]
-    fn can_build_disk_pointers() {
-        let (head, tail) = get_disk_pointers(&example_disk());
-
-        assert_eq!(
-            head,
-            DiskPointer {
-                index: 0,
-                is_file: true,
-                size: 2,
-            }
-        );
-
-        assert_eq!(
-            tail,
-            DiskPointer {
-                index: 18,
-                is_file: true,
-                size: 2,
-            }
-        );
-    }
-
-    #[test]
     fn can_generate_fragmented_blocks() {
         assert_eq!(
-            disk_blocks_fragmented(&example_disk()),
+            disk_files_fragmented(&example_disk()),
             vec![
-                (0, 0),
-                (1, 0),
-                (2, 9),
-                (3, 9),
-                (4, 8),
-                (5, 1),
-                (6, 1),
-                (7, 1),
-                (8, 8),
-                (9, 8),
-                (10, 8),
-                (11, 2),
-                (12, 7),
-                (13, 7),
-                (14, 7),
-                (15, 3),
-                (16, 3),
-                (17, 3),
-                (18, 6),
-                (19, 4),
-                (20, 4),
-                (21, 6),
-                (22, 5),
-                (23, 5),
-                (24, 5),
-                (25, 5),
-                (26, 6),
-                (27, 6)
+                File::new(0, 0, 2),
+                File::new(9, 2, 2),
+                File::new(8, 4, 1),
+                File::new(1, 5, 3),
+                File::new(8, 8, 3),
+                File::new(2, 11, 1),
+                File::new(7, 12, 3),
+                File::new(3, 15, 3),
+                File::new(6, 18, 1),
+                File::new(4, 19, 2),
+                File::new(6, 21, 1),
+                File::new(5, 22, 4),
+                File::new(6, 26, 1),
+                File::new(6, 27, 1),
             ]
         );
     }
@@ -242,75 +252,26 @@ mod tests {
     #[test]
     fn can_calculate_checksum_fragmented() {
         assert_eq!(
-            calculate_checksum(&example_disk(), disk_blocks_fragmented),
+            calculate_checksum(&example_disk(), disk_files_fragmented),
             1928
-        )
-    }
-
-    #[test]
-    fn can_get_disk_usage() {
-        assert_eq!(
-            get_usage(&example_disk()),
-            (
-                vec![
-                    (0, 0, 2),
-                    (5, 1, 3),
-                    (11, 2, 1),
-                    (15, 3, 3),
-                    (19, 4, 2),
-                    (22, 5, 4),
-                    (27, 6, 4),
-                    (32, 7, 3),
-                    (36, 8, 4),
-                    (40, 9, 2)
-                ],
-                vec![
-                    (2, 3),
-                    (8, 3),
-                    (12, 3),
-                    (18, 1),
-                    (21, 1),
-                    (26, 1),
-                    (31, 1),
-                    (35, 1)
-                ]
-            )
         )
     }
 
     #[test]
     fn can_generate_unfragmented_blocks() {
         assert_contains_in_any_order(
-            disk_blocks_unfragmented(&example_disk()),
+            disk_files_unfragmented(&example_disk()),
             vec![
-                (0, 0),
-                (1, 0),
-                (2, 9),
-                (3, 9),
-                (4, 2),
-                (5, 1),
-                (6, 1),
-                (7, 1),
-                (8, 7),
-                (9, 7),
-                (10, 7),
-                (12, 4),
-                (13, 4),
-                (15, 3),
-                (16, 3),
-                (17, 3),
-                (22, 5),
-                (23, 5),
-                (24, 5),
-                (25, 5),
-                (27, 6),
-                (28, 6),
-                (29, 6),
-                (30, 6),
-                (36, 8),
-                (37, 8),
-                (38, 8),
-                (39, 8),
+                File::new(0, 0, 2),
+                File::new(9, 2, 2),
+                File::new(2, 4, 1),
+                File::new(1, 5, 3),
+                File::new(7, 8, 3),
+                File::new(4, 12, 2),
+                File::new(3, 15, 3),
+                File::new(5, 22, 4),
+                File::new(6, 27, 4),
+                File::new(8, 36, 4),
             ],
         )
     }
@@ -318,7 +279,7 @@ mod tests {
     #[test]
     fn can_calculate_checksum_unfragmented() {
         assert_eq!(
-            calculate_checksum(&example_disk(), disk_blocks_unfragmented),
+            calculate_checksum(&example_disk(), disk_files_unfragmented),
             2858
         )
     }
