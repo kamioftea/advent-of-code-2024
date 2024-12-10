@@ -2,7 +2,7 @@
 //!
 //!
 
-use std::collections::HashSet;
+use itertools::Itertools;
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -38,48 +38,39 @@ impl Grid {
             .collect()
     }
 
-    fn score_points(&self, cell: Coordinate) -> usize {
-        self.get_peaks(cell).len()
+    fn score_trailhead(&self, trailhead: Coordinate) -> usize {
+        self.get_peaks(trailhead).iter().unique().count()
     }
 
-    fn get_peaks(&self, cell: Coordinate) -> HashSet<Coordinate> {
+    fn get_peaks(&self, cell: Coordinate) -> Vec<Coordinate> {
         match self.get(cell) {
-            Some(9) => vec![cell].into_iter().collect(),
+            Some(9) => vec![cell],
             Some(n) => self
                 .adjacent(cell)
                 .iter()
                 .filter(|(_, val)| *val == n + 1)
                 .map(|(coords, _)| self.get_peaks(*coords))
-                .reduce(|acc, val| acc.union(&val).cloned().collect())
-                .unwrap_or(HashSet::new()),
-            None => HashSet::new(),
+                .reduce(|acc, val| [acc, val].concat())
+                .unwrap_or(Vec::new()),
+            None => Vec::new(),
         }
     }
 
     fn total_score(&self) -> usize {
         self.trailheads()
             .iter()
-            .map(|&trailhead| self.score_points(trailhead))
+            .map(|&trailhead| self.score_trailhead(trailhead))
             .sum()
     }
 
-    fn rate_points(&self, cell: Coordinate) -> usize {
-        match self.get(cell) {
-            Some(9) => 1,
-            Some(n) => self
-                .adjacent(cell)
-                .iter()
-                .filter(|(_, val)| *val == n + 1)
-                .map(|(coords, _)| self.rate_points(*coords))
-                .sum(),
-            None => 0,
-        }
+    fn rate_trailhead(&self, cell: Coordinate) -> usize {
+        self.get_peaks(cell).iter().count()
     }
 
     fn total_rating(&self) -> usize {
         self.trailheads()
             .iter()
-            .map(|&trailhead| self.rate_points(trailhead))
+            .map(|&trailhead| self.rate_trailhead(trailhead))
             .sum()
     }
 
@@ -206,7 +197,7 @@ mod tests {
     fn can_score_point() {
         let grid = larger_example();
 
-        assert_eq!(grid.score_points((0, 2)), 5);
+        assert_eq!(grid.score_trailhead((0, 2)), 5);
     }
 
     #[test]
@@ -220,7 +211,7 @@ mod tests {
     fn can_rate_cell() {
         let grid = larger_example();
 
-        assert_eq!(grid.rate_points((0, 2)), 20);
+        assert_eq!(grid.rate_trailhead((0, 2)), 20);
     }
 
     #[test]
