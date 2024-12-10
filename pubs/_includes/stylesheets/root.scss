@@ -61,140 +61,144 @@
 @include foundation-prototype-classes;
 
 @each $name, $color in $foundation-palette {
-  .text-#{$name} {
-    color: $color
-  }
+    .text-#{$name} {
+        color: $color
+    }
 }
 
 html, body {
-  min-height: 100%;
+    min-height: 100%;
 }
 
 body {
-  display: grid;
+    display: grid;
 }
 
 main {
-  display: block;
-  width: min(rem-calc(775px), calc(100vw - 2 * $global-padding));
-  justify-self: center;
+    display: block;
+    width: min(rem-calc(775px), calc(100vw - 2 * $global-padding));
+    justify-self: center;
 }
 
 pre.hljs {
-  margin-bottom: 1rem;
+    margin-bottom: 1rem;
 }
 
 @include breakpoint(small down) {
-  pre > code {
-    font-size: $small-font-size;
-  }
+    pre > code {
+        font-size: $small-font-size;
+    }
+}
+
+.code-block {
+    font-size: smaller;
 }
 
 .cover-image {
-  aspect-ratio: 4 / 1;
-  background: no-repeat 50% 50%;
-  background-size: cover;
-  display: grid;
-  margin-bottom: $global-margin;
-
-  justify-items: stretch;
-  align-items: end;
-
-  .title-wrapper {
-    background-color: rgba($black, 50%);
-    padding: $global-padding;
+    aspect-ratio: 4 / 1;
+    background: no-repeat 50% 50%;
+    background-size: cover;
     display: grid;
-  }
+    margin-bottom: $global-margin;
 
-  h1 {
-    width: min(rem-calc(775px), calc(100vw - 2 * $global-padding));
-    justify-self: center;
-    margin: auto;
-  }
+    justify-items: stretch;
+    align-items: end;
+
+    .title-wrapper {
+        background-color: rgba($black, 50%);
+        padding: $global-padding;
+        display: grid;
+    }
+
+    h1 {
+        width: min(rem-calc(775px), calc(100vw - 2 * $global-padding));
+        justify-self: center;
+        margin: auto;
+    }
 }
 
 .solutions-list {
-  display: grid;
+    display: grid;
 
-  grid-template-columns: repeat(auto-fit, minmax(min(rem-calc(360px), calc(100vw - 2 * $global-margin)), 1fr));
-  grid-gap: $global-margin;
-  margin-bottom: $global-margin;
+    grid-template-columns: repeat(auto-fit, minmax(min(rem-calc(360px), calc(100vw - 2 * $global-margin)), 1fr));
+    grid-gap: $global-margin;
+    margin-bottom: $global-margin;
 
-  .solution {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    border: thin darken($primary-color, 40%) solid;
-    padding: $global-padding;
-    margin: 1px;
+    .solution {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        border: thin darken($primary-color, 40%) solid;
+        padding: $global-padding;
+        margin: 1px;
 
-    .solution-title {
-      font-size: rem-calc(18px);
-      color: $white;
-      line-height: 1.2;
-      margin-bottom: 0.5rem;
+        .solution-title {
+            font-size: rem-calc(18px);
+            color: $white;
+            line-height: 1.2;
+            margin-bottom: 0.5rem;
+        }
+
+        .solution-links {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+
+            @include breakpoint(rem-calc(360px) down) {
+                grid-template-columns: 1fr;
+            }
+
+            a:before {
+                content: '[';
+                color: $light-gray;
+            }
+
+            a:after {
+                content: ']';
+                color: $light-gray;
+            }
+        }
     }
-
-    .solution-links {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-
-      @include breakpoint(rem-calc(360px) down) {
-        grid-template-columns: 1fr;
-      }
-
-      a:before {
-        content: '[';
-        color: $light-gray;
-      }
-
-      a:after {
-        content: ']';
-        color: $light-gray;
-      }
-    }
-  }
 }
 
 .related-content {
-  border-top: thin darken($primary-color, 40%) solid;
-  padding-top: $global-padding;
+    border-top: thin darken($primary-color, 40%) solid;
+    padding-top: $global-padding;
 
-  display: grid;
-  grid-gap: $global-margin;
+    display: grid;
+    grid-gap: $global-margin;
 
-  grid-template:
+    grid-template:
     "prev next"
     "other other"
     / 1fr 1fr;
 
-  .prev-link {
-    justify-self: left;
-    grid-area: prev;
-  }
+    .prev-link {
+        justify-self: left;
+        grid-area: prev;
+    }
 
-  .next-link {
-    justify-self: right;
-    text-align: right;
-    grid-area: next;
-  }
+    .next-link {
+        justify-self: right;
+        text-align: right;
+        grid-area: next;
+    }
 
-  .other-links {
-    grid-area: other;
-  }
+    .other-links {
+        grid-area: other;
+    }
 
-  @include breakpoint(rem-calc(520px) down) {
-    grid-template:
+    @include breakpoint(rem-calc(520px) down) {
+        grid-template:
       "prev"
       "next"
       "other"
       / 1fr;
 
-    grid-gap: math.div($global-margin, 2);
+        grid-gap: math.div($global-margin, 2);
 
-    .next-link {
-      justify-self: left;
-      text-align: left;
+        .next-link {
+            justify-self: left;
+            text-align: left;
+        }
     }
-  }
 }

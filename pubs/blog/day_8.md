@@ -332,7 +332,9 @@ the sequence of nodes.
 ```rust
 type SequenceModifier = fn(Vec<Coordinate>) -> Vec<Coordinate>;
 
-fn antinode_pair_sequence_modifier(coordinate_sequence: Vec<Coordinate>) -> Vec<Coordinate> {
+fn antinode_pair_sequence_modifier(
+    coordinate_sequence: Vec<Coordinate>
+) -> Vec<Coordinate> {
     coordinate_sequence
         .into_iter()
         .dropping(1)
@@ -340,7 +342,9 @@ fn antinode_pair_sequence_modifier(coordinate_sequence: Vec<Coordinate>) -> Vec<
         .collect()
 }
 
-fn resonant_harmonies_sequence_modifier(coordinate_sequence: Vec<Coordinate>) -> Vec<Coordinate> {
+fn resonant_harmonies_sequence_modifier(
+    coordinate_sequence: Vec<Coordinate>
+) -> Vec<Coordinate> {
     coordinate_sequence
 }
 
