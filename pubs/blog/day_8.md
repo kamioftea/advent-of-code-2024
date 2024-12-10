@@ -282,7 +282,7 @@ fn sequence_from_antenna(
 }
 ```
 
-The differentiator then becomes how the parts use that sequence. Part one takes just the 2nd element, part 2 takes
+The differentiator then becomes how the parts use that sequence. Part one takes the 2nd element, part 2 takes
 all of them.
 
 ```rust
