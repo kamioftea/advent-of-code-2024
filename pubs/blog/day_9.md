@@ -374,7 +374,7 @@ fn can_calculate_checksum_unfragmented() {
 
 When refactoring part 1 to use two lists, files and spaces, it seems like it would be easier to use a single list
 with enums. So I have a go at rewriting it like that. I end up wrapping a value type within each enum variant so
-that I can still have a list of just files.
+that I can still have a list of only files.
 
 ```rust
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
