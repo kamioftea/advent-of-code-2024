@@ -13,3 +13,4 @@ reqwest = { version = "0.12.9", features = ["blocking", "cookies"] }
 regex = "1.11.1"
 scraper = "0.22.0"
 rayon = "1.10.0"
+cached = "0.54.0"

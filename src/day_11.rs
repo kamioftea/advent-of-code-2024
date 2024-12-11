@@ -2,7 +2,7 @@
 //!
 //!
 
-use std::collections::HashMap;
+use cached::proc_macro::cached;
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -40,10 +40,11 @@ fn blink(stones: &Vec<u64>) -> Vec<u64> {
                 return vec![1];
             }
 
-            let as_str = format!("{stone}");
-            if as_str.len() % 2 == 0 {
-                let (left, right) = as_str.split_at(as_str.len() / 2);
-                return vec![left.parse().unwrap(), right.parse().unwrap()];
+            // Even number of digits, split in two
+            let digits = stone.ilog(10) + 1;
+            if digits % 2 == 0 {
+                let midpoint = 10u64.pow(digits / 2);
+                return vec![stone / midpoint, stone % midpoint];
             }
 
             return vec![stone * 2024];
@@ -51,31 +52,24 @@ fn blink(stones: &Vec<u64>) -> Vec<u64> {
         .collect()
 }
 
-fn count_for_stone(stone: u64, iterations: u8, cache: &mut HashMap<(u64, u8), usize>) -> usize {
+#[cached]
+fn count_for_stone(stone: u64, iterations: u8) -> usize {
     if iterations == 0 {
         return 1;
     }
 
-    if let Some(&count) = cache.get(&(stone, iterations)) {
-        return count;
-    }
-
     let result = blink(&vec![stone])
         .iter()
-        .map(|&next_stone| count_for_stone(next_stone, iterations - 1, cache))
+        .map(|&next_stone| count_for_stone(next_stone, iterations - 1))
         .sum();
-
-    cache.insert((stone, iterations), result);
 
     result
 }
 
 fn count_after_blinks(stones: &Vec<u64>, number_of_blinks: u8) -> usize {
-    let mut cache = HashMap::new();
-
     stones
         .iter()
-        .map(|&stone| count_for_stone(stone, number_of_blinks, &mut cache))
+        .map(|&stone| count_for_stone(stone, number_of_blinks))
         .sum()
 }
 

@@ -1,3 +1,4 @@
+extern crate cached;
 extern crate core;
 extern crate itertools;
 #[macro_use]
