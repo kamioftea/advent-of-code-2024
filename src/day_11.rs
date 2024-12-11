@@ -1,6 +1,9 @@
 //! This is my solution for [Advent of Code - Day 11: _Plutonian Pebbles_](https://adventofcode.com/2024/day/11)
 //!
+//! [`parse_input`] turns the text into numbers.
 //!
+//! [`count_after_blinks`] solves both parts, calling [`count_for_stone`] recursively. This is cached as there are a
+//! lot of repeat small numbers at each depth. [`blink`] handles a single blink.
 
 use cached::proc_macro::cached;
 use std::fs;
@@ -24,6 +27,7 @@ pub fn run() {
     );
 }
 
+/// Turn the space separated number strings into `u64`s
 fn parse_input(input: &String) -> Vec<u64> {
     input
         .trim()
@@ -32,6 +36,8 @@ fn parse_input(input: &String) -> Vec<u64> {
         .collect()
 }
 
+/// This was originally written to work on the whole array of stones, but that wasn't convenient for caching. It is
+/// left as is for convenience of using existing tests.
 fn blink(stones: &Vec<u64>) -> Vec<u64> {
     stones
         .into_iter()
@@ -47,11 +53,13 @@ fn blink(stones: &Vec<u64>) -> Vec<u64> {
                 return vec![stone / midpoint, stone % midpoint];
             }
 
-            return vec![stone * 2024];
+            vec![stone * 2024]
         })
         .collect()
 }
 
+/// Recursive function to calculate the expansion of a single stone. There are many repeats, especially for small
+/// numbers, so this is cached to allow the program to run quickly.
 #[cached]
 fn count_for_stone(stone: u64, iterations: u8) -> usize {
     if iterations == 0 {
@@ -66,6 +74,7 @@ fn count_for_stone(stone: u64, iterations: u8) -> usize {
     result
 }
 
+/// Solves both parts. Delegates to [`count_for_stone`] for each stone in the list.
 fn count_after_blinks(stones: &Vec<u64>, number_of_blinks: u8) -> usize {
     stones
         .iter()
