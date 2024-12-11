@@ -2,6 +2,7 @@
 //!
 //!
 
+use std::collections::HashMap;
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -15,7 +16,12 @@ pub fn run() {
     println!(
         "After 25 blinks there are {} stones",
         count_after_blinks(&stones, 25)
-    )
+    );
+
+    println!(
+        "After 75 blinks there are {} stones",
+        count_after_blinks(&stones, 75)
+    );
 }
 
 fn parse_input(input: &String) -> Vec<u64> {
@@ -45,14 +51,32 @@ fn blink(stones: &Vec<u64>) -> Vec<u64> {
         .collect()
 }
 
-fn count_after_blinks(stones: &Vec<u64>, number_of_blinks: u64) -> usize {
-    let mut stones = stones.clone();
-
-    for _ in 0..number_of_blinks {
-        stones = blink(&stones)
+fn count_for_stone(stone: u64, iterations: u8, cache: &mut HashMap<(u64, u8), usize>) -> usize {
+    if iterations == 0 {
+        return 1;
     }
 
-    stones.len()
+    if let Some(&count) = cache.get(&(stone, iterations)) {
+        return count;
+    }
+
+    let result = blink(&vec![stone])
+        .iter()
+        .map(|&next_stone| count_for_stone(next_stone, iterations - 1, cache))
+        .sum();
+
+    cache.insert((stone, iterations), result);
+
+    result
+}
+
+fn count_after_blinks(stones: &Vec<u64>, number_of_blinks: u8) -> usize {
+    let mut cache = HashMap::new();
+
+    stones
+        .iter()
+        .map(|&stone| count_for_stone(stone, number_of_blinks, &mut cache))
+        .sum()
 }
 
 #[cfg(test)]
