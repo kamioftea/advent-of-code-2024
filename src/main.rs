@@ -1,3 +1,4 @@
+extern crate cached;
 extern crate core;
 extern crate itertools;
 #[macro_use]
@@ -5,6 +6,7 @@ extern crate text_io;
 mod bootstrap_day;
 mod day_1;
 mod day_10;
+mod day_11;
 mod day_2;
 mod day_3;
 mod day_4;
@@ -35,6 +37,7 @@ fn main() {
         Box::new(|| day_8::run()),
         Box::new(|| day_9::run()),
         Box::new(|| day_10::run()),
+        Box::new(|| day_11::run()),
     ];
 
     let start = Instant::now();
