@@ -2,7 +2,45 @@
 //!
 //!
 
+use std::collections::HashSet;
 use std::fs;
+
+type Coordinate = (usize, usize);
+
+struct Region {
+    plots: HashSet<Coordinate>,
+    perimeter: usize,
+}
+
+#[derive(Eq, PartialEq, Debug)]
+struct Garden {
+    plots: Vec<Vec<char>>,
+}
+
+impl Garden {
+    fn get(&self, (r, c): Coordinate) -> Option<char> {
+        self.plots.get(r).and_then(|row| row.get(c).copied())
+    }
+
+    fn adjacent(&self, (r, c): Coordinate) -> Vec<(Coordinate, char)> {
+        [
+            r.checked_sub(1).zip(Some(c)),
+            Some(r).zip(c.checked_add(1)),
+            r.checked_add(1).zip(Some(c)),
+            Some(r).zip(c.checked_sub(1)),
+        ]
+        .into_iter()
+        .flatten()
+        .flat_map(|coord| Some(coord).zip(self.get(coord)))
+        .collect()
+    }
+}
+
+fn parse_input(input: &String) -> Garden {
+    Garden {
+        plots: input.lines().map(|line| line.chars().collect()).collect(),
+    }
+}
 
 /// The entry point for running the solutions with the 'real' puzzle input.
 ///
@@ -14,5 +52,26 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use crate::day_12::*;
+    
+    #[test]
+    fn can_parse_input() {
+        let input = "AAAA
+BBCD
+BBCC
+EEEC"
+            .to_string();
 
+        assert_eq!(
+            parse_input(&input),
+            Garden {
+                plots: vec![
+                    vec!['A', 'A', 'A', 'A'],
+                    vec!['B', 'B', 'C', 'D'],
+                    vec!['B', 'B', 'C', 'C'],
+                    vec!['E', 'E', 'E', 'C'],
+                ]
+            }
+        )
+    }
 }
