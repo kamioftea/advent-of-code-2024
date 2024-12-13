@@ -4,11 +4,11 @@
 //!
 //! [`Garden::find_regions`] splits the Garden into [`Region`]s. [`Garden::total_fencing_cost`] solves part 1 using
 //! the data collected when finding the regions. [`Garden::total_fencing_cost_with_discount`] solves part 2, using
-//! [`Region::count_edges`] to find the unique edges in a region.
+//! [`Region::count_edges`] to find the unique edges in a region by counting corners in the perimeter.
 
 use itertools::Itertools;
 use std::collections::HashSet;
-use std::fs;
+use std::{fs, usize};
 
 /// The entry point for running the solutions with the 'real' puzzle input.
 ///
@@ -49,7 +49,7 @@ impl Delta {
 
     /// Get the coordinates of the plot after applying this delta to the provided plot. This will be None if either
     /// axis becomes negative
-    fn apply_to(&self, (r, c): Plot) -> Option<Plot> {
+    fn apply_to(&self, (r, c): &Plot) -> Option<Plot> {
         r.checked_add_signed(self.0)
             .zip(c.checked_add_signed(self.1))
     }
@@ -65,9 +65,9 @@ enum Side {
 }
 
 impl Side {
-    /// Given a facing parallel to the current edge, headed clockwise, the plot forwards and left will be filled if
+    /// Given a facing parallel to the current edge, headed clockwise, the plot forwards and Side::left will be filled if
     /// the edge turns round a concave corner.
-    fn concave_delta(&self) -> Delta {
+    fn convex_delta(&self) -> Delta {
         match self {
             Side::TOP => Delta::UP.add(&Delta::RIGHT),
             Side::RIGHT => Delta::RIGHT.add(&Delta::DOWN),
@@ -88,18 +88,8 @@ impl Side {
     }
 
     /// The facing parallel to this side, that walks the inside of that edge clockwise.
-    fn follow_clockwise_delta(&self) -> Delta {
+    fn straight_ahead_delta(&self) -> Delta {
         self.turn_clockwise().cross_outwards_delta()
-    }
-
-    /// The side counterclockwise of this one
-    fn turn_counterclockwise(&self) -> Side {
-        match self {
-            Side::TOP => Side::LEFT,
-            Side::RIGHT => Side::TOP,
-            Side::BOTTOM => Side::RIGHT,
-            Side::LEFT => Side::BOTTOM,
-        }
     }
 
     /// The side clockwise of this one
@@ -119,7 +109,7 @@ impl Side {
 struct Region {
     crop: char,
     plots: HashSet<Plot>,
-    perimeter: usize,
+    perimeter: HashSet<(Plot, Side)>,
 }
 
 impl Region {
@@ -128,7 +118,7 @@ impl Region {
         Region {
             crop,
             plots: HashSet::new(),
-            perimeter: 0,
+            perimeter: HashSet::new(),
         }
     }
 
@@ -141,103 +131,38 @@ impl Region {
         }
     }
 
-    /// Given a plot with a known edge, recursively follow that edge clockwise until it loops. Uses a shared visited
-    /// set so that reaching the same edge from a different plot or side doesn't lead to duplicates.
-    ///
-    /// Given this region:
-    /// ```text
-    ///     +---+---+
-    ///     | A | B |
-    /// +---+ - + - +
-    /// | E | D | C |
-    /// +---+---+---+
-    /// ```
-    ///
-    /// - If I start at A then the cell going clockwise I start facing rightwards. The cell above B is not in the
-    /// shape, so
-    ///   the edge doesn't turn right. Straight on is B, so I move there keeping the same facing.
-    /// - For B, the concave space is still not in the shape, neither is straight on, so stay in B and turn right,
-    /// - The same happens, moving into C then turning, incrementing the count again.
-    /// - C to D to E are all straight on.
-    /// - In E, the two cells are outside, so turn, and then ahead is still blocked, so turn again, incrementing the
-    /// count
-    ///   on each turn.
-    /// - From E, heading rightwards is the first concave corner. A is in the shape, so move to A and turn left.
-    /// - Finally, the way ahead is blocked, so turn, and I'm back to a position and facing already seen so that
-    /// perimeter is
-    ///   done.
+    /// Given an edge on one side of a plot. Calculate if following that edge clockwise is a corner
     ///
     /// ```text
-    /// Count:    0                 0                1                 1                 2
-    ///           X                     X
-    ///     +---+---+         +---+---+        +---+---+         +---+---+         +---+---+
-    ///     | > | O |         |   | > | X      |   | V |         |   |   |         |   |   |
-    /// +---+ - + - +     +---+ - + - +    +---+ - + - +     +---+ - + - +     +---+ - + - +
-    /// |   |   |   |     |   |   |   |    |   |   | O | X   |   |   | V |     |   | O | < |
-    /// +---+---+---+     +---+---+---+    +---+---+---+     +---+---+---+     +---+---+---+
-    ///                                                                X   X         X
-    ///
-    ///
-    /// Count:    2                 2                 3                 4                 5
-    ///                                                                           X   X
-    ///     +---+---+         +---+---+         +---+---+         +---+---+         +---+---+
-    ///     |   |   |         |   |   |   X   X |   |   |         | O |   |         | ^ |   |
-    /// +---+ - + - +     +---+ - + - +     +---+ - + - +     +---+ - + - +     +---+ - + - +
-    /// | O | < |   |   X | < |   |   |     | ^ |   |   |     | > |   |   |     |   |   |   |
-    /// +---+---+---+     +---+---+---+     +---+---+---+     +---+---+---+     +---+---+---+
-    ///   X             X
-    ///
-    /// Count:    6
-    ///
-    ///     +---+---+
-    ///     | > |   |
-    /// +---+ - + - +
-    /// |   |   |   |
-    /// +---+---+---+
+    ///     +---+
+    ///     | A |
+    /// +---+ - +
+    /// | B | C |
+    /// +---+---+
     /// ```
-    fn walk_perimeter(
-        &self,
-        plot: Plot,
-        side: Side,
-        visited: &mut HashSet<(Plot, Side)>,
-        edge_count: usize,
-    ) -> usize {
-        if !visited.insert((plot, side)) {
-            return edge_count;
-        }
+    ///
+    /// There are only three cases:
+    /// - Straight - no corner: The examples above are
+    ///     - Following the Side::right of the shape from `A` to `C`.
+    ///     - Following the Side::bottom of the shape from `C` to `B`.
+    /// - Convex corner, e.g. Side::top B going to A
+    /// - Concave corner which follow the Side::left and Side::top of A, Side::bottom and Side::left of B, and the Side::right of C.
+    ///
+    /// If the block straight-ahead is not set it's a concave corner. If it is set and the one ahead and to the Side::left
+    /// is also set it's concave.
+    fn check_for_corner(&self, plot: &Plot, side: &Side) -> bool {
+        let next_convex = side.convex_delta().apply_to(&plot);
+        let next_straight = side.straight_ahead_delta().apply_to(&plot);
 
-        let next_concave = side.concave_delta().apply_to(plot);
-        let next_straight = side.follow_clockwise_delta().apply_to(plot);
-
-        if self.contains(&next_concave) {
-            self.walk_perimeter(
-                next_concave.unwrap(),
-                side.turn_counterclockwise(),
-                visited,
-                edge_count + 1,
-            )
-        } else if self.contains(&next_straight) {
-            self.walk_perimeter(next_straight.unwrap(), side, visited, edge_count)
-        } else {
-            self.walk_perimeter(plot, side.turn_clockwise(), visited, edge_count + 1)
-        }
+        !self.contains(&next_straight) || self.contains(&next_convex)
     }
 
-    /// For all the plots in this region, find any edges by checking if adjacent cells are not in the region. If
-    /// so call [`Region::walk_perimeter`] to count the edges in the discovered perimeter, using a set to prevent
-    /// that perimeter being walked again from other starting points.
+    /// For all the edges in the perimeter, check if they are followed by a corner
     fn count_edges(&self) -> usize {
-        let mut visited = HashSet::new();
-        let mut edge_count = 0;
-        for &plot in self.plots.iter() {
-            for side in [Side::TOP, Side::RIGHT, Side::BOTTOM, Side::LEFT] {
-                if !self.contains(&side.cross_outwards_delta().apply_to(plot)) {
-                    edge_count += self.walk_perimeter(plot, side, &mut visited, 0)
-                }
-            }
-        }
-
-        edge_count
+        self.perimeter
+            .iter()
+            .filter(|(plot, side)| self.check_for_corner(plot, &side))
+            .count()
     }
 }
 
@@ -253,42 +178,31 @@ impl Garden {
         self.plots.get(r).and_then(|row| row.get(c).copied())
     }
 
-    /// Return each of the four orthogonally adjacent plots that are in the garden
-    fn adjacent(&self, origin: Plot) -> Vec<(Plot, char)> {
-        [
-            Delta::UP.apply_to(origin),
-            Delta::RIGHT.apply_to(origin),
-            Delta::DOWN.apply_to(origin),
-            Delta::LEFT.apply_to(origin),
-        ]
-        .into_iter()
-        .flatten()
-        .flat_map(|coord| Some(coord).zip(self.get(coord)))
-        .collect()
-    }
-
-    /// Do a modified bucket fill to determine the plots that make up the region that includes the starting plot.
-    /// Keeping track of when the bucket fill reaches an edge as that gives the length of the perimeter.
+    /// Do a modified bucket fill to determine the plots that make up the region that includes the starting plot. When
+    /// an edge is encountered store the side of the plot it is on for later corner detection.
     fn walk_region(&self, start: Plot) -> Region {
         fn walk_region_iter(garden: &Garden, plot: Plot, region: &mut Region) {
             let crop = garden.get(plot).unwrap();
-            if crop != region.crop {
-                region.perimeter += 1;
-                return;
-            }
 
             if !region.plots.insert(plot) {
                 // already visited
                 return;
             }
 
-            let adjacent = garden.adjacent(plot);
-            // Any cells missing are outside the grid and so that side has an edge
-            region.perimeter += 4 - adjacent.len();
-
-            adjacent
-                .iter()
-                .for_each(|&(next_plot, _)| walk_region_iter(garden, next_plot, region))
+            for side in [Side::TOP, Side::RIGHT, Side::BOTTOM, Side::LEFT] {
+                match side
+                    .cross_outwards_delta()
+                    .apply_to(&plot)
+                    .and_then(|next_plot| Some(next_plot).zip(garden.get(next_plot)))
+                {
+                    Some((next_plot, next_crop)) if next_crop == crop => {
+                        walk_region_iter(garden, next_plot, region)
+                    }
+                    _ => {
+                        region.perimeter.insert((plot, side));
+                    }
+                }
+            }
         }
 
         let mut region = Region::new(self.get(start).unwrap());
@@ -324,7 +238,7 @@ impl Garden {
     fn total_fencing_cost(&self) -> usize {
         self.find_regions()
             .iter()
-            .map(|region| region.plots.len() * region.perimeter)
+            .map(|region| region.plots.len() * region.perimeter.len())
             .sum()
     }
 
@@ -402,45 +316,114 @@ EEEC"
         assert_eq!(parse_input(&input), example_garden())
     }
 
+    fn region_a() -> Region {
+        Region {
+            crop: 'A',
+            plots: vec![(0, 0), (0, 1), (0, 2), (0, 3)].into_iter().collect(),
+            perimeter: vec![
+                ((0, 0), Side::TOP),
+                ((0, 0), Side::BOTTOM),
+                ((0, 0), Side::LEFT),
+                ((0, 1), Side::TOP),
+                ((0, 1), Side::BOTTOM),
+                ((0, 2), Side::TOP),
+                ((0, 2), Side::BOTTOM),
+                ((0, 3), Side::TOP),
+                ((0, 3), Side::RIGHT),
+                ((0, 3), Side::BOTTOM),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+
+    fn region_b() -> Region {
+        Region {
+            crop: 'B',
+            plots: vec![(1, 0), (1, 1), (2, 0), (2, 1)].into_iter().collect(),
+            perimeter: vec![
+                ((1, 0), Side::TOP),
+                ((1, 0), Side::LEFT),
+                ((1, 1), Side::TOP),
+                ((1, 1), Side::RIGHT),
+                ((2, 0), Side::BOTTOM),
+                ((2, 0), Side::LEFT),
+                ((2, 1), Side::RIGHT),
+                ((2, 1), Side::BOTTOM),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+
+    fn region_c() -> Region {
+        Region {
+            crop: 'C',
+            plots: vec![(1, 2), (2, 2), (2, 3), (3, 3)].into_iter().collect(),
+            perimeter: vec![
+                ((1, 2), Side::RIGHT),
+                ((1, 2), Side::LEFT),
+                ((2, 2), Side::BOTTOM),
+                ((2, 3), Side::RIGHT),
+                ((3, 3), Side::BOTTOM),
+                ((2, 3), Side::TOP),
+                ((1, 2), Side::TOP),
+                ((2, 2), Side::LEFT),
+                ((3, 3), Side::RIGHT),
+                ((3, 3), Side::LEFT),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+
+    fn region_d() -> Region {
+        Region {
+            crop: 'D',
+            plots: vec![(1, 3)].into_iter().collect(),
+            perimeter: vec![
+                ((1, 3), Side::TOP),
+                ((1, 3), Side::BOTTOM),
+                ((1, 3), Side::LEFT),
+                ((1, 3), Side::RIGHT),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+
+    fn region_e() -> Region {
+        Region {
+            crop: 'E',
+            plots: vec![(3, 0), (3, 1), (3, 2)].into_iter().collect(),
+            perimeter: vec![
+                ((3, 1), Side::TOP),
+                ((3, 2), Side::RIGHT),
+                ((3, 2), Side::BOTTOM),
+                ((3, 0), Side::TOP),
+                ((3, 2), Side::TOP),
+                ((3, 1), Side::BOTTOM),
+                ((3, 0), Side::LEFT),
+                ((3, 0), Side::BOTTOM),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+
     #[test]
     fn can_find_region() {
         let garden = example_garden();
 
-        let region_a = Region {
-            crop: 'A',
-            plots: vec![(0, 0), (0, 1), (0, 2), (0, 3)].into_iter().collect(),
-            perimeter: 10,
-        };
-        let region_b = Region {
-            crop: 'B',
-            plots: vec![(1, 0), (1, 1), (2, 0), (2, 1)].into_iter().collect(),
-            perimeter: 8,
-        };
-        let region_c = Region {
-            crop: 'C',
-            plots: vec![(1, 2), (2, 2), (2, 3), (3, 3)].into_iter().collect(),
-            perimeter: 10,
-        };
-        let region_d = Region {
-            crop: 'D',
-            plots: vec![(1, 3)].into_iter().collect(),
-            perimeter: 4,
-        };
-        let region_e = Region {
-            crop: 'E',
-            plots: vec![(3, 0), (3, 1), (3, 2)].into_iter().collect(),
-            perimeter: 8,
-        };
-
-        assert_eq!(garden.walk_region((0, 0)), region_a);
-        assert_eq!(garden.walk_region((1, 0)), region_b);
-        assert_eq!(garden.walk_region((1, 2)), region_c);
-        assert_eq!(garden.walk_region((1, 3)), region_d);
-        assert_eq!(garden.walk_region((3, 0)), region_e);
+        assert_eq!(garden.walk_region((0, 0)), region_a());
+        assert_eq!(garden.walk_region((1, 0)), region_b());
+        assert_eq!(garden.walk_region((1, 2)), region_c());
+        assert_eq!(garden.walk_region((1, 3)), region_d());
+        assert_eq!(garden.walk_region((3, 0)), region_e());
 
         assert_contains_in_any_order(
             garden.find_regions(),
-            vec![region_a, region_b, region_c, region_d, region_e],
+            vec![region_a(), region_b(), region_c(), region_d(), region_e()],
         );
     }
 
@@ -456,16 +439,18 @@ EEEC"
         let basic = Region {
             crop: 'A',
             plots: vec![(0, 0)].into_iter().collect(),
-            perimeter: 4,
+            perimeter: vec![
+                ((0, 0), Side::TOP),
+                ((0, 0), Side::RIGHT),
+                ((0, 0), Side::BOTTOM),
+                ((0, 0), Side::LEFT),
+            ]
+            .into_iter()
+            .collect(),
         };
         assert_eq!(basic.count_edges(), 4);
 
-        let region_a = Region {
-            crop: 'A',
-            plots: vec![(0, 0), (0, 1), (0, 2), (0, 3)].into_iter().collect(),
-            perimeter: 10,
-        };
-        assert_eq!(region_a.count_edges(), 4);
+        assert_eq!(region_a().count_edges(), 4);
 
         let regions = enclave_example().find_regions();
         let with_holes = regions.iter().find(|r| r.crop == 'O').unwrap();
