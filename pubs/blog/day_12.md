@@ -556,3 +556,131 @@ Today had some very complex logic, there was ASCII art and everything. With a bi
 reduced a bit, but it would also make it harder to read. I think I've been able to use some expressive types
 that make the code read like what it is doing. I suppose the real test is next time advent of code throws up a puzzle
 like this and I have to come back here and work out how it all works.
+
+## Update 13th December - Backed into a corner
+
+Apparently I can't stop thinking about this, and I saw someone point out that their key to part 2 the key is to
+count the corners. The number of corners in a closed shape is the same as the number of edges, so counting the corners
+is a proxy for counting the number of edges. I then realised my code was already doing this, but was then
+introducing a lot of complexity to find the edges in order by walking round the perimeter.
+
+Since to make sure any islands within the shape are found I still need to try all the possible edges, I can strip
+out all the perimeter walking and instead just check if each edge I found is followed by a corner using the logic of
+checking the cell one forward and one left when facing clockwise parallel to the edge, and the one straight-ahead.
+
+With that I can replace `walk_perimeter` with `check_for_corner`
+
+```rust
+impl Region {
+    /// Given an edge on one side of a plot. Calculate if following that edge clockwise 
+    /// is a corner
+    ///
+    /// ```text
+    ///     +---+
+    ///     | A |
+    /// +---+ - +
+    /// | B | C |
+    /// +---+---+
+    /// ```
+    ///
+    /// There are only three cases:
+    /// - Straight - no corner: The examples above are
+    ///     - Following the right of the shape from `A` to `C`.
+    ///     - Following the bottom of the shape from `C` to `B`.
+    /// - Convex corner, e.g. top B going to A
+    /// - Concave corner which follow the left and top of A, bottom and left of B, 
+    ///   and the right of C.
+    ///
+    /// If the block straight-ahead is not set it's a concave corner. If it is set 
+    /// and the one ahead and to the left is also set it's concave.
+    fn check_for_corner(&self, plot: Plot, side: Side) -> bool {
+        let next_convex = side.convex_delta().apply_to(plot);
+        let next_straight = side.follow_clockwise_delta().apply_to(plot);
+        
+        !self.contains(&next_straight) || self.contains(&next_convex)
+    }
+}
+```
+
+That needs an update to `count_edges`
+
+```rust
+impl Region {
+    fn count_edges(&self) -> usize {
+        let mut edge_count = 0;
+        for &plot in self.plots.iter() {
+            for side in [Side::TOP, Side::RIGHT, Side::BOTTOM, Side::LEFT] {
+                if !self.contains(&side.cross_outwards_delta().apply_to(plot))
+                    && self.check_for_corner(plot, side)
+                {
+                    edge_count += 1;
+                }
+            }
+        }
+        
+        edge_count
+    }
+}
+```
+
+But now that I know we only need to check each edge for a following corner, there is a further improvement to
+capture the edges when we first build the region.
+
+```diff
+  #[derive(Eq, PartialEq, Debug)]
+  struct Region {
+      crop: char,
+      plots: HashSet<Plot>,
+-     perimeter: usize,
++     perimeter: HashSet<(Plot, Side)>,
+  }
+```
+
+```rust
+impl Garden {
+    fn walk_region(&self, start: Plot) -> Region {
+        fn walk_region_iter(garden: &Garden, plot: Plot, region: &mut Region) {
+            let crop = garden.get(plot).unwrap();
+            
+            if !region.plots.insert(plot) {
+                // already visited
+                return;
+            }
+            
+            for side in [Side::TOP, Side::RIGHT, Side::BOTTOM, Side::LEFT] {
+                match side
+                    .cross_outwards_delta()
+                    .apply_to(&plot)
+                    .and_then(|next_plot| Some(next_plot).zip(garden.get(next_plot)))
+                {
+                    Some((next_plot, next_crop)) if next_crop == crop => {
+                        walk_region_iter(garden, next_plot, region)
+                    }
+                    _ => {
+                        region.perimeter.insert((plot, side));
+                    }
+                }
+            }
+        }
+        
+        let mut region = Region::new(self.get(start).unwrap());
+        walk_region_iter(self, start, &mut region);
+        region
+    }
+}
+```
+
+This then tidies up `count_edges`.
+
+```rust
+impl Region {
+    fn count_edges(&self) -> usize {
+        self.perimeter
+            .iter()
+            .filter(|(plot, side)| self.check_for_corner(plot, &side))
+            .count()
+    }
+}
+```
+
+These changes halve the run time, and I had good test coverage to make sure I wasn't changing the behaviour.
