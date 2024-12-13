@@ -552,7 +552,7 @@ AAAAAA
 
 ## Wrap up
 
-Today had some very complex logic, there was ASCII and everything. With a bit of maths, it probably could be reduced a
-bit, but it would also make it harder to read. I'm pretty happy now that I've been able to use some expressive types
+Today had some very complex logic, there was ASCII art and everything. With a bit of maths, it probably could be
+reduced a bit, but it would also make it harder to read. I think I've been able to use some expressive types
 that make the code read like what it is doing. I suppose the real test is next time advent of code throws up a puzzle
 like this and I have to come back here and work out how it all works.
