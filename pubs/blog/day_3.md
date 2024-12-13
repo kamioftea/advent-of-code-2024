@@ -8,7 +8,7 @@ Today was pulling things that look like a multiplication instruction out of a la
 to me reaching for regular expressions. I try to avoid these where `trim`s, `split`s,  `replace`s, etc. can be used
 as they're quite inefficient in comparison, but in this case they're a good fit.
 
-## Parse the input
+## Parsing the input
 
 The regex should match `mul` followed by two positive numbers in braces, without any other characters (including
 spaces). The numbers have to be 1 to 3 digits. This translates directly into a regex, which can then provide an

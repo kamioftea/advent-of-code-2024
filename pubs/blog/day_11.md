@@ -5,9 +5,9 @@ header: 'Day 11: Plutonian Pebbles'
 ---
 
 Today there is a very thinly veiled description of a list of ints, that change everytime I blink. This feels like a
-day when part 2 is going to be part 1, but big enough to take months. However, I don't instantly have an idea for
-being efficient now, so I'll implement part 1 naively, and then see exactly what the twist is, and hopefully I'll
-have some more insight into how it works by then.
+day when part 2 is going to be part 1, but big enough to take months. I don't instantly have an idea for making it
+efficient now, so I'll implement part 1 naively, and then see exactly what the twist is, and hopefully I'll have some
+more insight into how it works by then.
 
 ## Parsing the input
 
@@ -155,7 +155,7 @@ note is that there are a lot of repeated numbers. For example exploding `[1]`.
 
 This suggests some form of caching the results would be useful. The current implementation doesn't lend itself
 well to caching. Storing the numbers as a list will also get very big. Each stone doesn't care about its neighbours,
-so a recursive function just keeping track of the count would be enough.
+so a recursive function keeping track of the count would be enough.
 
 The result is always going to be the same for a specific stone with the same number of iterations left, so that is
 the cache key. I originally manage this with a `HashMap<(stone#, iterations#), result>`.
