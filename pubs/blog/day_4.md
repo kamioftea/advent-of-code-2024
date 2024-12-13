@@ -9,7 +9,7 @@ of code, so I was expecting one to turn up eventually. There will likely be more
 for a struct, and an `impl` block. It feels more natural to represent a grid as a specific thing. With hindsight my
 implementation could have used `type Wordsearch = Vec<Vec<char>>`.
 
-## Parse the input
+## Parsing the input
 
 First, I'll define the desired struct. It has been more performant to store this as a single level `Vec<char>` in
 the past, and use accessor methods to turn coordinates into an index, but it's not worth doing that unless I
