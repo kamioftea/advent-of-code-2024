@@ -15,24 +15,29 @@ pub fn run() {
 
     println!(
         "The total cost for available prizes is {}",
-        sum_prize_costs(&machines)
+        sum_prize_costs(&machines, 0)
+    );
+
+    println!(
+        "The total cost for available prizes with offset is {}",
+        sum_prize_costs(&machines, 10000000000000)
     );
 }
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 struct Coords {
-    x: i32,
-    y: i32,
+    x: i64,
+    y: i64,
 }
 
 impl FromStr for Coords {
     type Err = ();
 
     fn from_str(line: &str) -> Result<Self, Self::Err> {
-        fn parse_part(part: &str) -> i32 {
+        fn parse_part(part: &str) -> i64 {
             part.chars()
                 .flat_map(|c| c.to_digit(10))
-                .fold(0, |acc, digit| 10 * acc + digit as i32)
+                .fold(0, |acc, digit| 10 * acc + digit as i64)
         }
 
         if let Some((_, coords)) = line.split_once(": ") {
@@ -72,13 +77,13 @@ impl FromStr for Machine {
 }
 
 impl Machine {
-    fn get_presses(&self) -> Option<(i32, i32)> {
-        let b = (self.a.y * self.prize.x - self.a.x * self.prize.y)
+    fn get_presses(&self, offset: i64) -> Option<(i64, i64)> {
+        let b = (self.a.y * (self.prize.x + offset) - self.a.x * (self.prize.y + offset))
             / (self.a.y * self.b.x - self.a.x * self.b.y);
-        let a = (self.prize.x - self.b.x * b) / self.a.x;
+        let a = (self.prize.x + offset - self.b.x * b) / self.a.x;
 
-        if a * self.a.x + b * self.b.x == self.prize.x
-            && a * self.a.y + b * self.b.y == self.prize.y
+        if a * self.a.x + b * self.b.x == self.prize.x + offset
+            && a * self.a.y + b * self.b.y == self.prize.y + offset
         {
             Some((a, b))
         } else {
@@ -86,8 +91,8 @@ impl Machine {
         }
     }
 
-    fn get_cost_for_prize(&self) -> Option<i32> {
-        self.get_presses().map(|(a, b)| 3 * a + b)
+    fn get_cost_for_prize(&self, offset: i64) -> Option<i64> {
+        self.get_presses(offset).map(|(a, b)| 3 * a + b)
     }
 }
 
@@ -98,8 +103,11 @@ fn parse_input(input: &String) -> Vec<Machine> {
         .collect()
 }
 
-fn sum_prize_costs(machines: &Vec<Machine>) -> i32 {
-    machines.iter().flat_map(Machine::get_cost_for_prize).sum()
+fn sum_prize_costs(machines: &Vec<Machine>, offset: i64) -> i64 {
+    machines
+        .iter()
+        .flat_map(|machine| machine.get_cost_for_prize(offset))
+        .sum()
 }
 
 #[cfg(test)]
@@ -158,14 +166,14 @@ Prize: X=18641, Y=10279
     fn can_get_presses() {
         let machines = example_machines();
 
-        assert_eq!(machines.get(0).unwrap().get_presses(), Some((80, 40)));
-        assert_eq!(machines.get(1).unwrap().get_presses(), None);
-        assert_eq!(machines.get(2).unwrap().get_presses(), Some((38, 86)));
-        assert_eq!(machines.get(3).unwrap().get_presses(), None);
+        assert_eq!(machines.get(0).unwrap().get_presses(0), Some((80, 40)));
+        assert_eq!(machines.get(1).unwrap().get_presses(0), None);
+        assert_eq!(machines.get(2).unwrap().get_presses(0), Some((38, 86)));
+        assert_eq!(machines.get(3).unwrap().get_presses(0), None);
     }
 
     #[test]
     fn can_sum_costs() {
-        assert_eq!(sum_prize_costs(&example_machines()), 480)
+        assert_eq!(sum_prize_costs(&example_machines(), 0), 480)
     }
 }
