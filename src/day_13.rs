@@ -1,6 +1,9 @@
 //! This is my solution for [Advent of Code - Day 13: _Claw Contraption_](https://adventofcode.com/2024/day/13)
 //!
+//! [`parse_input`] Uses [`Machine::from_str`] and [`Coords::from_str`] to build the input into a list of [`Machine`]s.
 //!
+//! [`sum_prize_costs`] solves both parts, taking an offset to be set to 10_000_000_000_000 for part 2. This uses
+//! [`Machine::get_cost_for_prize`], and [`Machine::get_presses`] to solve the machine's equations.
 
 use std::fs;
 use std::str::FromStr;
@@ -20,10 +23,11 @@ pub fn run() {
 
     println!(
         "The total cost for available prizes with offset is {}",
-        sum_prize_costs(&machines, 10000000000000)
+        sum_prize_costs(&machines, 10_000_000_000_000)
     );
 }
 
+/// A pair of 2d coordinates. Used for the button press delta's and the prize target
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 struct Coords {
     x: i64,
@@ -33,6 +37,15 @@ struct Coords {
 impl FromStr for Coords {
     type Err = ();
 
+    /// Picks two comma separated numbers out of a line of machine specification, ignoring other characters on the line.
+    ///
+    /// The following lines parse to (94,34), (22, 67), and (8400, 5400).
+    ///
+    /// ```text
+    /// Button A: X+94, Y+34
+    /// Button B: X+22, Y+67
+    /// Prize: X=8400, Y=5400
+    /// ```
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         fn parse_part(part: &str) -> i64 {
             part.chars()
@@ -63,39 +76,52 @@ struct Machine {
 impl FromStr for Machine {
     type Err = ();
 
+    /// Parse a block of machine specification, taking:
+    /// * The first line as the delta for button A
+    /// * The second line as the delta for button B
+    /// * The third line as the position of the prize
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut lines = s.lines();
+
         let a = lines.next().and_then(|line| line.parse().ok());
         let b = lines.next().and_then(|line| line.parse().ok());
         let prize = lines.next().and_then(|line| line.parse().ok());
-        if let (Some(a), Some(b), Some(prize)) = (a, b, prize) {
-            return Ok(Machine { a, b, prize });
-        }
 
-        Err(())
+        if let (Some(a), Some(b), Some(prize)) = (a, b, prize) {
+            Ok(Machine { a, b, prize })
+        } else {
+            Err(())
+        }
     }
 }
 
 impl Machine {
+    /// For a machine, solve the pair of linear equations it represents (one in `x` and one in `y`). Due to integer
+    /// division, the results may be rounded. Check they actually solve the equation, returning them if they do,
+    /// otherwise return `None` as the prize isn't reachable with a whole number of presses.
+    ///
+    /// See also [Cramer's rule](https://en.wikipedia.org/wiki/Cramer%27s_rule).
     fn get_presses(&self, offset: i64) -> Option<(i64, i64)> {
-        let b = (self.a.y * (self.prize.x + offset) - self.a.x * (self.prize.y + offset))
-            / (self.a.y * self.b.x - self.a.x * self.b.y);
-        let a = (self.prize.x + offset - self.b.x * b) / self.a.x;
+        let Machine { a, b, prize } = self;
 
-        if a * self.a.x + b * self.b.x == self.prize.x + offset
-            && a * self.a.y + b * self.b.y == self.prize.y + offset
-        {
-            Some((a, b))
+        let nb = (a.y * (prize.x + offset) - a.x * (prize.y + offset)) / (a.y * b.x - a.x * b.y);
+        let na = (prize.x + offset - b.x * nb) / a.x;
+
+        // check that a and b have not been rounded
+        if na * a.x + nb * b.x == prize.x + offset && na * a.y + nb * b.y == prize.y + offset {
+            Some((na, nb))
         } else {
             None
         }
     }
 
+    /// Map the number of button presses for a prize, to its cost in tokens
     fn get_cost_for_prize(&self, offset: i64) -> Option<i64> {
         self.get_presses(offset).map(|(a, b)| 3 * a + b)
     }
 }
 
+/// Turn the puzzle input into a list of machines by parsing each block separated by a blank line
 fn parse_input(input: &String) -> Vec<Machine> {
     input
         .split("\n\n")
@@ -103,6 +129,7 @@ fn parse_input(input: &String) -> Vec<Machine> {
         .collect()
 }
 
+/// Use [`Machine::get_cost_for_prize`] to get the total cost over all valid machines
 fn sum_prize_costs(machines: &Vec<Machine>, offset: i64) -> i64 {
     machines
         .iter()
@@ -174,6 +201,10 @@ Prize: X=18641, Y=10279
 
     #[test]
     fn can_sum_costs() {
-        assert_eq!(sum_prize_costs(&example_machines(), 0), 480)
+        assert_eq!(sum_prize_costs(&example_machines(), 0), 480);
+        assert_eq!(
+            sum_prize_costs(&example_machines(), 10_000_000_000_000),
+            875318608908
+        );
     }
 }
