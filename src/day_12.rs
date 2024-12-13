@@ -123,6 +123,7 @@ struct Region {
 }
 
 impl Region {
+    /// Initialise an empty region
     fn new(crop: char) -> Region {
         Region {
             crop,
@@ -336,6 +337,7 @@ impl Garden {
     }
 }
 
+/// Parse a text grid into a [`Garden`]
 fn parse_input(input: &String) -> Garden {
     Garden {
         plots: input.lines().map(|line| line.chars().collect()).collect(),
