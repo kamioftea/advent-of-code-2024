@@ -158,8 +158,9 @@ $$\frac{P_x - B_xn_B}{A_x} = \frac{P_y - B_yn_B}{A_y}$$
 Rearranging in terms of $n_B$
 
 $$\frac{B_xn_B}{A_x} - \frac{B_yn_B}{A_y} = \frac{P_x}{A_x} - \frac{P_y}{A_y}$$
-$$\frac{B_xn_B}{A_y} - {B_yn_B}{A_x} = P_xA_y - P_yA_x$$
-$$n_B = \frac{P_xA_y - P_yA_x}{B_xA_y - B_yA_x}$$
+$$A_yB_xn_B - A_xB_yn_B = P_xA_y - P_yA_x$$
+$$n_B(A_yB_x - A_xB_y) = P_xA_y - P_yA_x$$
+$$n_B = \frac{P_xA_y - P_yA_x}{A_yB_x - A_xB_y}$$
 
 This can be plugged back in to either of the two equations in terms of $n_A$ to give both numbers.
 
