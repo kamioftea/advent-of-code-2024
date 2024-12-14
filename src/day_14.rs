@@ -4,8 +4,10 @@
 
 use crate::day_14::Quadrant::*;
 use itertools::Itertools;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fs;
+use std::iter::successors;
 use std::str::FromStr;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -16,10 +18,16 @@ pub fn run() {
     let contents = fs::read_to_string("res/day-14-input.txt").expect("Failed to read file");
     let robots = parse_input(&contents);
 
+    let bounds = (103, 101);
     println!(
         "The total safety factor after 100 steps is {}",
-        total_safety_factor(&robots, 100, &(103, 101))
-    )
+        total_safety_factor_after_steps(&robots, 100, &bounds)
+    );
+
+    println!(
+        "The tree is formed after {} seconds",
+        guess_tree_frame(&robots, &bounds)
+    );
 }
 
 type Position = (usize, usize);
@@ -67,7 +75,7 @@ impl FromStr for Robot {
 }
 
 impl Robot {
-    fn simulate(&self, steps: usize, &(max_r, max_c): &(usize, usize)) -> Position {
+    fn simulate(&self, steps: usize, &(max_r, max_c): &(usize, usize)) -> Robot {
         let Robot {
             position: (r, c),
             velocity: (dr, dc),
@@ -76,7 +84,9 @@ impl Robot {
         let dr = ((dr % max_r as isize) + max_r as isize) as usize;
         let dc = ((dc % max_c as isize) + max_c as isize) as usize;
 
-        ((r + dr * steps) % max_r, (c + dc * steps) % max_c)
+        let new_pos = ((r + dr * steps) % max_r, (c + dc * steps) % max_c);
+
+        Robot::new(new_pos, self.velocity)
     }
 }
 
@@ -84,7 +94,7 @@ fn parse_input(input: &String) -> Vec<Robot> {
     input.lines().map(|line| line.parse().unwrap()).collect()
 }
 
-fn simulate_robots(robots: &Vec<Robot>, steps: usize, bounds: &(usize, usize)) -> Vec<Position> {
+fn simulate_robots(robots: &Vec<Robot>, steps: usize, bounds: &(usize, usize)) -> Vec<Robot> {
     robots
         .iter()
         .map(|robot| robot.simulate(steps, bounds))
@@ -108,14 +118,62 @@ fn partition_position((r, c): Position, (max_r, max_c): &(usize, usize)) -> Opti
     }
 }
 
-fn total_safety_factor(robots: &Vec<Robot>, steps: usize, bounds: &(usize, usize)) -> usize {
+fn total_safety_factor_after_steps(
+    robots: &Vec<Robot>,
+    steps: usize,
+    bounds: &(usize, usize),
+) -> usize {
     let positions = simulate_robots(robots, steps, bounds);
-    positions
+    total_safety_factor(&positions, bounds)
+}
+
+fn total_safety_factor(robots: &Vec<Robot>, bounds: &(usize, usize)) -> usize {
+    robots
         .iter()
-        .flat_map(|&pos| partition_position(pos, bounds))
+        .flat_map(|&robot| partition_position(robot.position, bounds))
         .counts()
         .values()
         .product()
+}
+
+fn iterate_positions<'a>(
+    robots: &'a Vec<Robot>,
+    bounds: &'a (usize, usize),
+) -> impl Iterator<Item = Vec<Robot>> + 'a {
+    let first = robots.clone();
+
+    successors(Some(robots.clone()), move |robots| {
+        let next = simulate_robots(robots, 1, bounds);
+        if next != first {
+            Some(next)
+        } else {
+            None
+        }
+    })
+}
+
+fn guess_tree_frame(robots: &Vec<Robot>, bounds: &(usize, usize)) -> usize {
+    let (pos, _) = iterate_positions(robots, bounds)
+        .enumerate()
+        .min_by_key(|(_, robots)| total_safety_factor(robots, bounds))
+        .unwrap();
+
+    pos
+}
+
+#[allow(dead_code)]
+fn dump_robots(robots: &Vec<Robot>, &(r_max, c_max): &(usize, usize)) {
+    let positions: HashSet<Position> = robots.iter().map(|robot| robot.position).collect();
+    for r in 0..r_max {
+        for c in 0..c_max {
+            if positions.contains(&(r, c)) {
+                print!("#")
+            } else {
+                print!(" ");
+            }
+        }
+        println!()
+    }
 }
 
 #[cfg(test)]
@@ -180,17 +238,21 @@ p=9,5 v=-3,-3
     #[test]
     fn can_simulate_robot() {
         let robot = Robot::new((4, 2), (-3, 2));
-        assert_eq!(robot.simulate(0, &(7, 11)), (4, 2));
-        assert_eq!(robot.simulate(1, &(7, 11)), (1, 4));
-        assert_eq!(robot.simulate(2, &(7, 11)), (5, 6));
-        assert_eq!(robot.simulate(3, &(7, 11)), (2, 8));
-        assert_eq!(robot.simulate(4, &(7, 11)), (6, 10));
-        assert_eq!(robot.simulate(5, &(7, 11)), (3, 1));
+        assert_eq!(robot.simulate(0, &(7, 11)).position, (4, 2));
+        assert_eq!(robot.simulate(1, &(7, 11)).position, (1, 4));
+        assert_eq!(robot.simulate(2, &(7, 11)).position, (5, 6));
+        assert_eq!(robot.simulate(3, &(7, 11)).position, (2, 8));
+        assert_eq!(robot.simulate(4, &(7, 11)).position, (6, 10));
+        assert_eq!(robot.simulate(5, &(7, 11)).position, (3, 1));
     }
 
     #[test]
     fn can_simulate_robots() {
-        let positions = simulate_robots(&example_robots(), 100, &(7, 11));
+        let positions: Vec<Position> = simulate_robots(&example_robots(), 100, &(7, 11))
+            .iter()
+            .map(|r| r.position)
+            .collect();
+
         assert_eq!(
             positions.iter().filter(|&&p| p == (0, 6)).count(),
             2,
@@ -232,6 +294,14 @@ p=9,5 v=-3,-3
 
     #[test]
     fn can_calculate_total_safety_factor() {
-        assert_eq!(total_safety_factor(&example_robots(), 100, &(7, 11)), 12)
+        assert_eq!(
+            total_safety_factor_after_steps(&example_robots(), 100, &(7, 11)),
+            12
+        )
+    }
+
+    #[test]
+    fn can_find_frame_with_lowest_safety_factor() {
+        assert_eq!(guess_tree_frame(&example_robots(), &(7, 11)), 7)
     }
 }

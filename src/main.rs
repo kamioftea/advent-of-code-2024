@@ -47,7 +47,7 @@ fn main() {
     ];
 
     let start = Instant::now();
-    match days.get((day - 1) as usize) {
+    match day.checked_sub(1).and_then(|idx| days.get(idx as usize)) {
         Some(solution) => solution(),
         None if day == 0 => days.iter().enumerate().for_each(|(i, solution)| {
             let start = Instant::now();
