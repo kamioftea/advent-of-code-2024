@@ -1,6 +1,13 @@
 //! This is my solution for [Advent of Code - Day 14: _Restroom Redoubt_](https://adventofcode.com/2024/day/14)
 //!
+//! [`parse_input`] uses [`Robot::from_str`] to build up a list of [`Robot`]s.
 //!
+//! [`total_safety_factor_after_steps`] is used to solve part 1, delegating to [`simulate_robots`] and
+//! [`total_safety_factor`] which groups robots into [`Quadrant`]s and calculates the product.
+//!
+//! [`guess_tree_seconds`] uses [`iterate_seconds`] to loop through all the possible positions of the robots, find
+//! the one with the lowest [`total_safety_factor`] as a proxy for the robots clustering into a tree.
+//! [`render_robots`] can be used to show the robot's current position visually
 
 use crate::day_14::Quadrant::*;
 use itertools::Itertools;
@@ -26,13 +33,16 @@ pub fn run() {
 
     println!(
         "The tree is formed after {} seconds",
-        guess_tree_frame(&robots, &bounds)
+        guess_tree_seconds(&robots, &bounds)
     );
 }
 
+/// A robot's position on the grid (row, column)
 type Position = (usize, usize);
+/// The speed a robot is travelling along each axis (row, column)
 type Velocity = (isize, isize);
 
+/// The four areas of the grid used to calculate the `total_safety_factor`
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 enum Quadrant {
     TopLeft,
@@ -41,6 +51,7 @@ enum Quadrant {
     BottomRight,
 }
 
+/// A robot patrolling the grid
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 struct Robot {
     position: Position,
@@ -56,6 +67,7 @@ impl Robot {
 impl FromStr for Robot {
     type Err = ();
 
+    /// Expected format `p=10,5 v=-1,2`
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         fn parse_part<T>(part: &str) -> (T, T)
         where
@@ -75,6 +87,7 @@ impl FromStr for Robot {
 }
 
 impl Robot {
+    /// Calculate the robot's position after `steps` seconds on the provided grid
     fn simulate(&self, steps: usize, &(max_r, max_c): &(usize, usize)) -> Robot {
         let Robot {
             position: (r, c),
@@ -90,10 +103,12 @@ impl Robot {
     }
 }
 
+/// Turn the input file into the internal representation
 fn parse_input(input: &String) -> Vec<Robot> {
     input.lines().map(|line| line.parse().unwrap()).collect()
 }
 
+/// Calculate the position of all robots after `steps` seconds
 fn simulate_robots(robots: &Vec<Robot>, steps: usize, bounds: &(usize, usize)) -> Vec<Robot> {
     robots
         .iter()
@@ -101,6 +116,8 @@ fn simulate_robots(robots: &Vec<Robot>, steps: usize, bounds: &(usize, usize)) -
         .collect()
 }
 
+/// For a given position, calculate which quadrant of the grid it is on. If the position is on one of the centre lines
+/// of the grid, this returns `None`
 fn partition_position((r, c): Position, (max_r, max_c): &(usize, usize)) -> Option<Quadrant> {
     let mid_r = max_r / 2;
     let mid_c = max_c / 2;
@@ -118,6 +135,19 @@ fn partition_position((r, c): Position, (max_r, max_c): &(usize, usize)) -> Opti
     }
 }
 
+/// The product of the count of robots in each of the four quadrants
+fn total_safety_factor(robots: &Vec<Robot>, bounds: &(usize, usize)) -> usize {
+    let counts = robots
+        .iter()
+        .flat_map(|&robot| partition_position(robot.position, bounds))
+        .counts();
+
+    [TopLeft, TopRight, BottomLeft, BottomRight]
+        .iter()
+        .fold(1, |acc, quadrant| acc * counts.get(quadrant).unwrap_or(&0))
+}
+
+/// The solution to part 1 - simulate `steps` seconds and then get the `total_safety_factor` of the new positions.
 fn total_safety_factor_after_steps(
     robots: &Vec<Robot>,
     steps: usize,
@@ -127,16 +157,8 @@ fn total_safety_factor_after_steps(
     total_safety_factor(&positions, bounds)
 }
 
-fn total_safety_factor(robots: &Vec<Robot>, bounds: &(usize, usize)) -> usize {
-    robots
-        .iter()
-        .flat_map(|&robot| partition_position(robot.position, bounds))
-        .counts()
-        .values()
-        .product()
-}
-
-fn iterate_positions<'a>(
+/// An iterator over the unique arrangements of the robots on the grid
+fn iterate_seconds<'a>(
     robots: &'a Vec<Robot>,
     bounds: &'a (usize, usize),
 ) -> impl Iterator<Item = Vec<Robot>> + 'a {
@@ -152,8 +174,9 @@ fn iterate_positions<'a>(
     })
 }
 
-fn guess_tree_frame(robots: &Vec<Robot>, bounds: &(usize, usize)) -> usize {
-    let (pos, _) = iterate_positions(robots, bounds)
+/// Guesses which second shows the image by finding which has the lowest `total_safety_factor`
+fn guess_tree_seconds(robots: &Vec<Robot>, bounds: &(usize, usize)) -> usize {
+    let (pos, _) = iterate_seconds(robots, bounds)
         .enumerate()
         .min_by_key(|(_, robots)| total_safety_factor(robots, bounds))
         .unwrap();
@@ -162,18 +185,63 @@ fn guess_tree_frame(robots: &Vec<Robot>, bounds: &(usize, usize)) -> usize {
 }
 
 #[allow(dead_code)]
-fn dump_robots(robots: &Vec<Robot>, &(r_max, c_max): &(usize, usize)) {
+/// Render the position of the robots on an ascii art grid.
+fn render_robots(robots: &Vec<Robot>, &(r_max, c_max): &(usize, usize), show_middle_lines: bool) {
+    robots.iter().for_each(
+        |Robot {
+             position: (r, c),
+             velocity: (dr, dc),
+         }| println!("p={c},{r} v={dc},{dr}"),
+    );
+
     let positions: HashSet<Position> = robots.iter().map(|robot| robot.position).collect();
+    let r_mid = r_max / 2;
+    let c_mid = c_max / 2;
+
+    println!(
+        "+{0}{1}{0}+",
+        "-".repeat(c_mid),
+        if show_middle_lines { "+" } else { "-" }
+    );
+
     for r in 0..r_max {
+        print!(
+            "{}",
+            if show_middle_lines && r == r_mid {
+                "+"
+            } else {
+                "|"
+            }
+        );
         for c in 0..c_max {
-            if positions.contains(&(r, c)) {
+            if show_middle_lines && r == r_mid {
+                if c == c_mid {
+                    print!("+")
+                } else {
+                    print!("-")
+                }
+            } else if show_middle_lines && c == { c_mid } {
+                print!("|")
+            } else if positions.contains(&(r, c)) {
                 print!("#")
             } else {
                 print!(" ");
             }
         }
-        println!()
+        println!(
+            "{}",
+            if show_middle_lines && r == r_mid {
+                "+"
+            } else {
+                "|"
+            }
+        );
     }
+    println!(
+        "+{0}{1}{0}+",
+        "-".repeat(c_mid),
+        if show_middle_lines { "+" } else { "-" }
+    );
 }
 
 #[cfg(test)]
@@ -261,8 +329,7 @@ p=9,5 v=-3,-3
         assert_eq!(
             positions.iter().filter(|&&p| p == (5, 4)).count(),
             2,
-            "There should be two robots at position (5,\
-        4)"
+            "There should be two robots at position (5, 4)"
         );
 
         assert_contains_in_any_order(positions, positions_after_100_steps());
@@ -289,7 +356,7 @@ p=9,5 v=-3,-3
                 Some(BottomLeft),
                 Some(BottomRight),
             ]
-        )
+        );
     }
 
     #[test]
@@ -297,11 +364,39 @@ p=9,5 v=-3,-3
         assert_eq!(
             total_safety_factor_after_steps(&example_robots(), 100, &(7, 11)),
             12
+        );
+        assert_eq!(
+            total_safety_factor_after_steps(&example_robots(), 0, &(7, 11)),
+            0
+        )
+    }
+
+    fn tree_example_robots() -> Vec<Robot> {
+        parse_input(
+            &"p=5,4 v=-2,2
+p=9,4 v=-1,-1
+p=10,5 v=-1,2
+p=4,4 v=2,-1
+p=6,1 v=3,1
+p=2,4 v=2,3
+p=10,2 v=-1,-3
+p=0,0 v=-1,-2
+p=2,6 v=-3,2
+p=10,6 v=-1,-1
+p=10,1 v=-2,3
+p=0,6 v=2,4
+p=4,6 v=3,2
+p=4,1 v=2,-1
+p=4,2 v=-3,-2
+p=5,0 v=-1,-2
+p=7,0 v=-3,4
+p=6,1 v=-2,2"
+                .to_string(),
         )
     }
 
     #[test]
     fn can_find_frame_with_lowest_safety_factor() {
-        assert_eq!(guess_tree_frame(&example_robots(), &(7, 11)), 7)
+        assert_eq!(guess_tree_seconds(&tree_example_robots(), &(7, 11)), 72);
     }
 }
