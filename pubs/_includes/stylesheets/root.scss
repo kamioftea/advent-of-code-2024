@@ -94,6 +94,12 @@ pre.hljs {
     font-size: smaller;
 }
 
+.code-block.ascii-art {
+    font-size: 8px;
+    line-height: 6px;
+    overflow: hidden;
+}
+
 .cover-image {
     aspect-ratio: 4 / 1;
     background: no-repeat 50% 50%;

@@ -315,13 +315,13 @@ The first and second case are a corner, so also increment the edge count by one.
   done.
 
 ```text
-Count:    0                 0                1                 1                 2
-          X                     X                                         
-    +---+---+         +---+---+        +---+---+         +---+---+         +---+---+
-    | > | O |         |   | > | X      |   | V |         |   |   |         |   |   | 
-+---+ - + - +     +---+ - + - +    +---+ - + - +     +---+ - + - +     +---+ - + - +
-|   |   |   |     |   |   |   |    |   |   | O | X   |   |   | V |     |   | O | < | 
-+---+---+---+     +---+---+---+    +---+---+---+     +---+---+---+     +---+---+---+
+Count:    0                 0                 1                 1                 2
+          X                     X                                          
+    +---+---+         +---+---+         +---+---+         +---+---+         +---+---+
+    | > | O |         |   | > | X       |   | V |         |   |   |         |   |   | 
++---+ - + - +     +---+ - + - +     +---+ - + - +     +---+ - + - +     +---+ - + - +
+|   |   |   |     |   |   |   |     |   |   | O | X   |   |   | V |     |   | O | < | 
++---+---+---+     +---+---+---+     +---+---+---+     +---+---+---+     +---+---+---+
                                                                X   X         X
                                                               
                                                               
@@ -565,8 +565,9 @@ is a proxy for counting the number of edges. I then realised my code was already
 introducing a lot of complexity to find the edges in order by walking round the perimeter.
 
 Since to make sure any islands within the shape are found I still need to try all the possible edges, I can strip
-out all the perimeter walking and instead just check if each edge I found is followed by a corner using the logic of
-checking the cell one forward and one left when facing clockwise parallel to the edge, and the one straight-ahead.
+out all the perimeter walking and instead check if each edge I found is followed by a corner. I can use the existing
+logic of checking the cell one forward and one left when facing clockwise parallel to the edge, and the one
+straight-ahead.
 
 With that I can replace `walk_perimeter` with `check_for_corner`
 
