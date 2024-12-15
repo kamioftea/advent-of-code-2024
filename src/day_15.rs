@@ -12,7 +12,13 @@ use std::str::FromStr;
 /// - The puzzle input is expected to be at `<project_root>/res/day-15-input`
 /// - It is expected this will be called by [`super::main()`] when the user elects to run day 15.
 pub fn run() {
-    let _contents = fs::read_to_string("res/day-15-input.txt").expect("Failed to read file");
+    let contents = fs::read_to_string("res/day-15-input.txt").expect("Failed to read file");
+    let (grid, moves) = parse_input(&contents);
+
+    println!(
+        "After applying the moves the sum of the GPS coordinates is {}",
+        grid.apply_moves(&moves).sum_gps()
+    )
 }
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
@@ -160,6 +166,28 @@ impl Grid {
             .iter()
             .fold(self.clone(), |grid, mv| grid.move_robot(mv))
     }
+
+    fn sum_gps(&self) -> usize {
+        self.boxes.iter().map(|&(r, c)| 100 * r + c).sum()
+    }
+
+    fn double(&self) -> Grid {
+        let walls = self
+            .walls
+            .iter()
+            .flat_map(|&(r, c)| vec![(r, c * 2), (r, c * 2 + 1)])
+            .collect();
+        let boxes = self.boxes.iter().map(|&(r, c)| (r, c * 2)).collect();
+        let robot = (self.robot.0, self.robot.1 * 2);
+        let bounds = (self.bounds.0, self.bounds.1 * 2);
+
+        Grid {
+            walls,
+            boxes,
+            robot,
+            bounds,
+        }
+    }
 }
 
 fn parse_input(input: &String) -> (Grid, Vec<Move>) {
@@ -294,19 +322,10 @@ mod tests {
         let small_grid = small_example_grid();
         let small_moves = small_example_moves();
 
-        let expected = Grid::from_str(
-            "########
-#....OO#
-##.....#
-#.....O#
-#.#O@..#
-#...O..#
-#...O..#
-########",
-        )
-        .unwrap();
-
-        assert_eq!(small_grid.apply_moves(&small_moves), expected);
+        assert_eq!(
+            small_grid.apply_moves(&small_moves),
+            small_example_after_moves()
+        );
 
         let (larger_grid, larger_moves) = parse_input(
             &"##########
@@ -334,7 +353,14 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
             .to_string(),
         );
 
-        let expected = Grid::from_str(
+        assert_eq!(
+            larger_grid.apply_moves(&larger_moves),
+            larger_example_after_moves()
+        );
+    }
+
+    fn larger_example_after_moves() -> Grid {
+        Grid::from_str(
             "##########
 #.O.O.OOO#
 #........#
@@ -346,8 +372,65 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
 #OO....OO#
 ##########",
         )
+        .unwrap()
+    }
+
+    fn small_example_after_moves() -> Grid {
+        Grid::from_str(
+            "########
+#....OO#
+##.....#
+#.....O#
+#.#O@..#
+#...O..#
+#...O..#
+########",
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn can_sum_gps() {
+        assert_eq!(small_example_after_moves().sum_gps(), 2028);
+        assert_eq!(larger_example_after_moves().sum_gps(), 10092);
+    }
+
+    #[test]
+    fn can_double_grid() {
+        let grid = Grid::from_str(
+            "#######
+#...#.#
+#.....#
+#..OO@#
+#..O..#
+#.....#
+#######",
+        )
         .unwrap();
 
-        assert_eq!(larger_grid.apply_moves(&larger_moves), expected);
+        // ##############
+        // ##......##..##
+        // ##..........##
+        // ##....[][]@.##
+        // ##....[]....##
+        // ##..........##
+        // ##############
+        let double_grid = grid.double();
+
+        assert_eq!(double_grid.walls.len(), 50);
+
+        assert!(
+            double_grid.walls.contains(&(1, 8)),
+            "Inner wall should have first half at (1,8)"
+        );
+        assert!(
+            double_grid.walls.contains(&(1, 9)),
+            "Inner wall should have second half at (1,9)"
+        );
+
+        assert_eq!(double_grid.robot, (3, 10));
+
+        let expected_boxes = vec![(3, 6), (3, 8), (4, 6)].into_iter().collect();
+        assert_eq!(double_grid.boxes, expected_boxes)
     }
 }
