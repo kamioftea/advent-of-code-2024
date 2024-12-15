@@ -18,6 +18,11 @@ pub fn run() {
     println!(
         "After applying the moves the sum of the GPS coordinates is {}",
         grid.apply_moves(&moves).sum_gps()
+    );
+
+    println!(
+        "After applying the moves to the doubled warehouse the sum of the GPS coordinates is {}",
+        grid.double().apply_moves(&moves).sum_gps()
     )
 }
 
@@ -65,15 +70,37 @@ impl Move {
 
 type Coordinate = (usize, usize);
 
+trait Grid {
+    fn boxes(&self) -> HashSet<Coordinate>;
+    fn move_box(&mut self, pos: &Coordinate, mv: &Move) -> bool;
+    fn move_robot(&self, mv: &Move) -> Self;
+
+    fn sum_gps(&self) -> usize {
+        self.boxes().iter().map(|&(r, c)| 100 * r + c).sum()
+    }
+}
+
+trait GridExtensions {
+    fn apply_moves(&self, moves: &Vec<Move>) -> Self;
+}
+
+impl<T: Grid + Clone> GridExtensions for T {
+    fn apply_moves(&self, moves: &Vec<Move>) -> Self {
+        moves
+            .iter()
+            .fold(self.clone(), |grid, mv| grid.move_robot(mv))
+    }
+}
+
 #[derive(Eq, PartialEq, Debug, Clone)]
-struct Grid {
+struct SingleGrid {
     walls: HashSet<Coordinate>,
     boxes: HashSet<Coordinate>,
     robot: Coordinate,
     bounds: (usize, usize),
 }
 
-impl FromStr for Grid {
+impl FromStr for SingleGrid {
     type Err = ();
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
@@ -100,7 +127,7 @@ impl FromStr for Grid {
             max_r = max_r.max(r);
         }
 
-        Ok(Grid {
+        Ok(SingleGrid {
             walls,
             boxes,
             robot,
@@ -109,7 +136,7 @@ impl FromStr for Grid {
     }
 }
 
-impl Grid {
+impl SingleGrid {
     #[allow(dead_code)]
     fn render(&self) {
         for r in 0..self.bounds.0 {
@@ -127,6 +154,30 @@ impl Grid {
             println!()
         }
         println!()
+    }
+
+    fn double(&self) -> DoubleGrid {
+        let walls = self
+            .walls
+            .iter()
+            .flat_map(|&(r, c)| vec![(r, c * 2), (r, c * 2 + 1)])
+            .collect();
+        let boxes = self.boxes.iter().map(|&(r, c)| (r, c * 2)).collect();
+        let robot = (self.robot.0, self.robot.1 * 2);
+        let bounds = (self.bounds.0, self.bounds.1 * 2);
+
+        DoubleGrid {
+            walls,
+            boxes,
+            robot,
+            bounds,
+        }
+    }
+}
+
+impl Grid for SingleGrid {
+    fn boxes(&self) -> HashSet<Coordinate> {
+        self.boxes.clone()
     }
 
     fn move_box(&mut self, pos: &Coordinate, mv: &Move) -> bool {
@@ -160,37 +211,107 @@ impl Grid {
 
         new_grid
     }
+}
 
-    fn apply_moves(&self, moves: &Vec<Move>) -> Self {
-        moves
-            .iter()
-            .fold(self.clone(), |grid, mv| grid.move_robot(mv))
-    }
+#[derive(Eq, PartialEq, Debug, Clone)]
+struct DoubleGrid {
+    walls: HashSet<Coordinate>,
+    boxes: HashSet<Coordinate>,
+    robot: Coordinate,
+    bounds: (usize, usize),
+}
 
-    fn sum_gps(&self) -> usize {
-        self.boxes.iter().map(|&(r, c)| 100 * r + c).sum()
-    }
+impl FromStr for DoubleGrid {
+    type Err = ();
 
-    fn double(&self) -> Grid {
-        let walls = self
-            .walls
-            .iter()
-            .flat_map(|&(r, c)| vec![(r, c * 2), (r, c * 2 + 1)])
-            .collect();
-        let boxes = self.boxes.iter().map(|&(r, c)| (r, c * 2)).collect();
-        let robot = (self.robot.0, self.robot.1 * 2);
-        let bounds = (self.bounds.0, self.bounds.1 * 2);
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let mut walls = HashSet::new();
+        let mut boxes = HashSet::new();
+        let mut robot = (0, 0);
+        let mut max_r = 0;
+        let mut max_c = 0;
 
-        Grid {
+        for (r, row) in input.lines().enumerate() {
+            for (c, char) in row.chars().enumerate() {
+                match char {
+                    '#' => {
+                        walls.insert((r, c));
+                    }
+                    '[' => {
+                        boxes.insert((r, c));
+                    }
+                    '@' => robot = (r, c),
+                    _ => {}
+                }
+                max_c = max_c.max(c);
+            }
+            max_r = max_r.max(r);
+        }
+
+        Ok(DoubleGrid {
             walls,
             boxes,
             robot,
-            bounds,
-        }
+            bounds: (max_r + 1, max_c + 1),
+        })
     }
 }
 
-fn parse_input(input: &String) -> (Grid, Vec<Move>) {
+impl Grid for DoubleGrid {
+    fn boxes(&self) -> HashSet<Coordinate> {
+        self.boxes.clone()
+    }
+
+    fn move_box(&mut self, pos: &Coordinate, mv: &Move) -> bool {
+        if let Some(left_new_pos) = mv.apply_to(pos, self.bounds) {
+            let right_new_pos = (left_new_pos.0, left_new_pos.1 + 1);
+            let possible_blocking_boxes = [
+                (left_new_pos.0, left_new_pos.1 - 1),
+                left_new_pos,
+                right_new_pos,
+            ];
+
+            if self.walls.contains(&left_new_pos) || self.walls.contains(&right_new_pos) {
+                false
+            } else if possible_blocking_boxes
+                .iter()
+                .filter(|&maybe_blocker| maybe_blocker != pos)
+                .all(|blocker| !self.boxes.contains(blocker) || self.move_box(blocker, mv))
+            {
+                self.boxes.remove(&pos);
+                self.boxes.insert(left_new_pos)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    fn move_robot(&self, mv: &Move) -> Self {
+        let mut new_grid = self.clone();
+        if let Some(new_pos) = mv.apply_to(&self.robot, self.bounds) {
+            if self.walls.contains(&new_pos) {
+                return new_grid;
+            }
+
+            let possible_start_of_box = (new_pos.0, new_pos.1 - 1);
+            if (self.boxes.contains(&new_pos) && !new_grid.move_box(&new_pos, &mv))
+                || (self.boxes.contains(&possible_start_of_box)
+                    && !new_grid.move_box(&possible_start_of_box, &mv))
+            {
+                // move_boxes may partially apply some moves
+                return self.clone();
+            }
+
+            new_grid.robot = new_pos;
+        }
+
+        new_grid
+    }
+}
+
+fn parse_input(input: &String) -> (SingleGrid, Vec<Move>) {
     let (grid, moves) = input.split_once("\n\n").unwrap();
 
     (
@@ -203,7 +324,7 @@ fn parse_input(input: &String) -> (Grid, Vec<Move>) {
 mod tests {
     use crate::day_15::*;
     
-    fn small_example_grid() -> Grid {
+    fn small_example_grid() -> SingleGrid {
         #[rustfmt::skip]
         let walls = vec![
             (0, 0),(0, 1),(0, 2),(0, 3),(0, 4),(0, 5),(0, 6),(0, 7),
@@ -216,7 +337,7 @@ mod tests {
             (7, 0),(7, 1),(7, 2),(7, 3),(7, 4),(7, 5),(7, 6),(7, 7),
         ];
 
-        Grid {
+        SingleGrid {
             walls: walls.into_iter().collect(),
             boxes: vec![(1, 3), (1, 5), (2, 4), (3, 4), (4, 4), (5, 4)]
                 .into_iter()
@@ -317,6 +438,7 @@ mod tests {
         assert_eq!(boxes_blocked, multi_boxes_moved);
     }
 
+    //noinspection SpellCheckingInspection
     #[test]
     fn can_apply_move_list() {
         let small_grid = small_example_grid();
@@ -327,7 +449,16 @@ mod tests {
             small_example_after_moves()
         );
 
-        let (larger_grid, larger_moves) = parse_input(
+        let (larger_grid, larger_moves) = larger_example();
+
+        assert_eq!(
+            larger_grid.apply_moves(&larger_moves),
+            larger_example_after_moves()
+        );
+    }
+
+    fn larger_example() -> (SingleGrid, Vec<Move>) {
+        parse_input(
             &"##########
 #..O..O.O#
 #......O.#
@@ -351,16 +482,11 @@ vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v
 v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
 "
             .to_string(),
-        );
-
-        assert_eq!(
-            larger_grid.apply_moves(&larger_moves),
-            larger_example_after_moves()
-        );
+        )
     }
 
-    fn larger_example_after_moves() -> Grid {
-        Grid::from_str(
+    fn larger_example_after_moves() -> SingleGrid {
+        SingleGrid::from_str(
             "##########
 #.O.O.OOO#
 #........#
@@ -375,8 +501,8 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
         .unwrap()
     }
 
-    fn small_example_after_moves() -> Grid {
-        Grid::from_str(
+    fn small_example_after_moves() -> SingleGrid {
+        SingleGrid::from_str(
             "########
 #....OO#
 ##.....#
@@ -397,16 +523,7 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
 
     #[test]
     fn can_double_grid() {
-        let grid = Grid::from_str(
-            "#######
-#...#.#
-#.....#
-#..OO@#
-#..O..#
-#.....#
-#######",
-        )
-        .unwrap();
+        let grid = example_to_double();
 
         // ##############
         // ##......##..##
@@ -432,5 +549,74 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
 
         let expected_boxes = vec![(3, 6), (3, 8), (4, 6)].into_iter().collect();
         assert_eq!(double_grid.boxes, expected_boxes)
+    }
+
+    fn example_to_double() -> SingleGrid {
+        SingleGrid::from_str(
+            "#######
+#...#.#
+#.....#
+#..OO@#
+#..O..#
+#.....#
+#######",
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn can_move_boxes_on_double_grid() {
+        let start = example_to_double().double();
+
+        let expected_boxes = vec![(3, 5), (3, 7), (4, 6)].into_iter().collect();
+        let after_left = start.move_robot(&Left);
+        assert_eq!(after_left.robot, (3, 9));
+        assert_eq!(after_left.boxes, expected_boxes);
+
+        let expected_boxes = vec![(2, 5), (2, 7), (3, 6)].into_iter().collect();
+        let after_up = after_left.apply_moves(&vec![Down, Down, Left, Left, Up]);
+        assert_eq!(after_up.robot, (4, 7));
+        assert_eq!(after_up.boxes, expected_boxes);
+    }
+
+    #[test]
+    fn can_parse_double_grid() {
+        let actual = DoubleGrid::from_str(
+            "##############
+##......##..##
+##..........##
+##....[][]@.##
+##....[]....##
+##..........##
+##############",
+        )
+        .unwrap();
+
+        let expected = example_to_double().double();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn can_apply_moves_to_double_grid() {
+        let (larger_grid, larger_moves) = larger_example();
+        let actual = larger_grid.double().apply_moves(&larger_moves);
+
+        let expected = DoubleGrid::from_str(
+            "####################
+##[].......[].[][]##
+##[]...........[].##
+##[]........[][][]##
+##[]......[]....[]##
+##..##......[]....##
+##..[]............##
+##..@......[].[][]##
+##......[][]..[]..##
+####################",
+        )
+        .unwrap();
+
+        assert_eq!(actual, expected);
+        assert_eq!(actual.sum_gps(), 9021);
     }
 }
