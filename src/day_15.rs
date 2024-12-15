@@ -3,7 +3,6 @@
 //!
 
 use crate::day_15::Move::{Down, Left, Right, Up};
-use itertools::Itertools;
 use std::collections::HashSet;
 use std::fs;
 use std::str::FromStr;
@@ -105,6 +104,7 @@ impl FromStr for Grid {
 }
 
 impl Grid {
+    #[allow(dead_code)]
     fn render(&self) {
         for r in 0..self.bounds.0 {
             for c in 0..self.bounds.1 {
@@ -138,7 +138,7 @@ impl Grid {
         }
     }
 
-    fn move_robot(&self, mv: Move) -> Self {
+    fn move_robot(&self, mv: &Move) -> Self {
         let mut new_grid = self.clone();
         if let Some(new_pos) = mv.apply_to(&self.robot, self.bounds) {
             if self.walls.contains(&new_pos) {
@@ -154,6 +154,12 @@ impl Grid {
 
         new_grid
     }
+
+    fn apply_moves(&self, moves: &Vec<Move>) -> Self {
+        moves
+            .iter()
+            .fold(self.clone(), |grid, mv| grid.move_robot(mv))
+    }
 }
 
 fn parse_input(input: &String) -> (Grid, Vec<Move>) {
@@ -167,7 +173,6 @@ fn parse_input(input: &String) -> (Grid, Vec<Move>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::day_15::Move::*;
     use crate::day_15::*;
     
     fn small_example_grid() -> Grid {
@@ -193,6 +198,13 @@ mod tests {
         }
     }
 
+    fn small_example_moves() -> Vec<Move> {
+        vec![
+            Left, Up, Up, Right, Right, Right, Down, Down, Left, Down, Right, Right, Down, Left,
+            Left,
+        ]
+    }
+
     #[test]
     fn can_parse_input() {
         let input = "########
@@ -210,37 +222,31 @@ mod tests {
         let (grid, moves) = parse_input(&input);
         assert_eq!(grid, small_example_grid());
 
-        assert_eq!(
-            moves,
-            vec![
-                Left, Up, Up, Right, Right, Right, Down, Down, Left, Down, Right, Right, Down,
-                Left, Left
-            ]
-        );
+        assert_eq!(moves, small_example_moves());
     }
 
     #[test]
     fn can_apply_move_into_empty() {
         let grid = small_example_grid();
-        let moved_up = grid.move_robot(Up);
+        let moved_up = grid.move_robot(&Up);
 
         assert_eq!(moved_up.walls, grid.walls);
         assert_eq!(moved_up.boxes, grid.boxes);
         assert_eq!(moved_up.robot, (1, 2));
 
-        let moved_right = grid.move_robot(Right);
+        let moved_right = grid.move_robot(&Right);
 
         assert_eq!(moved_right.walls, grid.walls);
         assert_eq!(moved_right.boxes, grid.boxes);
         assert_eq!(moved_right.robot, (2, 3));
 
-        let moved_down = grid.move_robot(Down);
+        let moved_down = grid.move_robot(&Down);
 
         assert_eq!(moved_down.walls, grid.walls);
         assert_eq!(moved_down.boxes, grid.boxes);
         assert_eq!(moved_down.robot, (3, 2));
 
-        let moved_left = moved_up.move_robot(Left);
+        let moved_left = moved_up.move_robot(&Left);
 
         assert_eq!(moved_left.walls, grid.walls);
         assert_eq!(moved_left.boxes, grid.boxes);
@@ -250,7 +256,7 @@ mod tests {
     #[test]
     fn move_is_blocked_by_walls() {
         let grid = small_example_grid();
-        let move_attempted = grid.move_robot(Left);
+        let move_attempted = grid.move_robot(&Left);
 
         assert_eq!(move_attempted, grid);
     }
@@ -263,13 +269,13 @@ mod tests {
         expected_boxes.remove(&(1, 3));
         expected_boxes.insert((1, 4));
 
-        let single_box_moved = grid.move_robot(Up).move_robot(Right);
+        let single_box_moved = grid.move_robot(&Up).move_robot(&Right);
 
         assert_eq!(single_box_moved.walls, grid.walls);
         assert_eq!(single_box_moved.boxes, expected_boxes);
         assert_eq!(single_box_moved.robot, (1, 3));
 
-        let multi_boxes_moved = single_box_moved.move_robot(Right);
+        let multi_boxes_moved = single_box_moved.move_robot(&Right);
 
         expected_boxes.remove(&(1, 4));
         expected_boxes.insert((1, 6));
@@ -278,8 +284,70 @@ mod tests {
         assert_eq!(multi_boxes_moved.boxes, expected_boxes);
         assert_eq!(multi_boxes_moved.robot, (1, 4));
 
-        let boxes_blocked = multi_boxes_moved.move_robot(Right);
+        let boxes_blocked = multi_boxes_moved.move_robot(&Right);
 
         assert_eq!(boxes_blocked, multi_boxes_moved);
+    }
+
+    #[test]
+    fn can_apply_move_list() {
+        let small_grid = small_example_grid();
+        let small_moves = small_example_moves();
+
+        let expected = Grid::from_str(
+            "########
+#....OO#
+##.....#
+#.....O#
+#.#O@..#
+#...O..#
+#...O..#
+########",
+        )
+        .unwrap();
+
+        assert_eq!(small_grid.apply_moves(&small_moves), expected);
+
+        let (larger_grid, larger_moves) = parse_input(
+            &"##########
+#..O..O.O#
+#......O.#
+#.OO..O.O#
+#..O@..O.#
+#O#..O...#
+#O..O..O.#
+#.OO.O.OO#
+#....O...#
+##########
+
+<vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^
+vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v
+><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<
+<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^
+^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><
+^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^
+>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^
+<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>
+^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>
+v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
+"
+            .to_string(),
+        );
+
+        let expected = Grid::from_str(
+            "##########
+#.O.O.OOO#
+#........#
+#OO......#
+#OO@.....#
+#O#.....O#
+#O.....OO#
+#O.....OO#
+#OO....OO#
+##########",
+        )
+        .unwrap();
+
+        assert_eq!(larger_grid.apply_moves(&larger_moves), expected);
     }
 }
