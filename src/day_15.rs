@@ -13,16 +13,16 @@ use std::str::FromStr;
 /// - It is expected this will be called by [`super::main()`] when the user elects to run day 15.
 pub fn run() {
     let contents = fs::read_to_string("res/day-15-input.txt").expect("Failed to read file");
-    let (grid, moves) = parse_input(&contents);
+    let (warehouse, moves) = parse_input(&contents);
 
     println!(
         "After applying the moves the sum of the GPS coordinates is {}",
-        grid.apply_moves(&moves).sum_gps()
+        warehouse.apply_moves(&moves).sum_gps()
     );
 
     println!(
         "After applying the moves to the doubled warehouse the sum of the GPS coordinates is {}",
-        grid.double().apply_moves(&moves).sum_gps()
+        warehouse.double().apply_moves(&moves).sum_gps()
     )
 }
 
@@ -70,7 +70,7 @@ impl Move {
 
 type Coordinate = (usize, usize);
 
-trait Grid {
+trait Warehouse {
     fn boxes(&self) -> HashSet<Coordinate>;
     fn move_box(&mut self, pos: &Coordinate, mv: &Move) -> bool;
     fn move_robot(&self, mv: &Move) -> Self;
@@ -78,32 +78,16 @@ trait Grid {
     fn sum_gps(&self) -> usize {
         self.boxes().iter().map(|&(r, c)| 100 * r + c).sum()
     }
-}
 
-trait GridExtensions {
-    fn apply_moves(&self, moves: &Vec<Move>) -> Self;
-}
-
-impl<T: Grid + Clone> GridExtensions for T {
-    fn apply_moves(&self, moves: &Vec<Move>) -> Self {
-        moves
-            .iter()
-            .fold(self.clone(), |grid, mv| grid.move_robot(mv))
-    }
-}
-
-#[derive(Eq, PartialEq, Debug, Clone)]
-struct SingleGrid {
-    walls: HashSet<Coordinate>,
-    boxes: HashSet<Coordinate>,
-    robot: Coordinate,
-    bounds: (usize, usize),
-}
-
-impl FromStr for SingleGrid {
-    type Err = ();
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
+    fn parse_warehouse(
+        input: &str,
+    ) -> (
+        HashSet<(usize, usize)>,
+        HashSet<(usize, usize)>,
+        (usize, usize),
+        usize,
+        usize,
+    ) {
         let mut walls = HashSet::new();
         let mut boxes = HashSet::new();
         let mut robot = (0, 0);
@@ -116,7 +100,7 @@ impl FromStr for SingleGrid {
                     '#' => {
                         walls.insert((r, c));
                     }
-                    'O' => {
+                    '[' | 'O' => {
                         boxes.insert((r, c));
                     }
                     '@' => robot = (r, c),
@@ -126,8 +110,37 @@ impl FromStr for SingleGrid {
             }
             max_r = max_r.max(r);
         }
+        (walls, boxes, robot, max_r, max_c)
+    }
+}
 
-        Ok(SingleGrid {
+trait WarehouseExtensions {
+    fn apply_moves(&self, moves: &Vec<Move>) -> Self;
+}
+
+impl<T: Warehouse + Clone> WarehouseExtensions for T {
+    fn apply_moves(&self, moves: &Vec<Move>) -> Self {
+        moves
+            .iter()
+            .fold(self.clone(), |warehouse, mv| warehouse.move_robot(mv))
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Clone)]
+struct SingleWarehouse {
+    walls: HashSet<Coordinate>,
+    boxes: HashSet<Coordinate>,
+    robot: Coordinate,
+    bounds: (usize, usize),
+}
+
+impl FromStr for SingleWarehouse {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let (walls, boxes, robot, max_r, max_c) = SingleWarehouse::parse_warehouse(input);
+
+        Ok(SingleWarehouse {
             walls,
             boxes,
             robot,
@@ -136,7 +149,7 @@ impl FromStr for SingleGrid {
     }
 }
 
-impl SingleGrid {
+impl SingleWarehouse {
     #[allow(dead_code)]
     fn render(&self) {
         for r in 0..self.bounds.0 {
@@ -156,7 +169,7 @@ impl SingleGrid {
         println!()
     }
 
-    fn double(&self) -> DoubleGrid {
+    fn double(&self) -> DoubleWarehouse {
         let walls = self
             .walls
             .iter()
@@ -166,7 +179,7 @@ impl SingleGrid {
         let robot = (self.robot.0, self.robot.1 * 2);
         let bounds = (self.bounds.0, self.bounds.1 * 2);
 
-        DoubleGrid {
+        DoubleWarehouse {
             walls,
             boxes,
             robot,
@@ -175,7 +188,7 @@ impl SingleGrid {
     }
 }
 
-impl Grid for SingleGrid {
+impl Warehouse for SingleWarehouse {
     fn boxes(&self) -> HashSet<Coordinate> {
         self.boxes.clone()
     }
@@ -196,59 +209,38 @@ impl Grid for SingleGrid {
     }
 
     fn move_robot(&self, mv: &Move) -> Self {
-        let mut new_grid = self.clone();
+        let mut new_warehouse = self.clone();
         if let Some(new_pos) = mv.apply_to(&self.robot, self.bounds) {
             if self.walls.contains(&new_pos) {
-                return new_grid;
+                return new_warehouse;
             }
 
-            if self.boxes.contains(&new_pos) && !new_grid.move_box(&new_pos, &mv) {
-                return new_grid;
+            if self.boxes.contains(&new_pos) && !new_warehouse.move_box(&new_pos, &mv) {
+                return new_warehouse;
             }
 
-            new_grid.robot = new_pos
+            new_warehouse.robot = new_pos
         }
 
-        new_grid
+        new_warehouse
     }
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
-struct DoubleGrid {
+struct DoubleWarehouse {
     walls: HashSet<Coordinate>,
     boxes: HashSet<Coordinate>,
     robot: Coordinate,
     bounds: (usize, usize),
 }
 
-impl FromStr for DoubleGrid {
+impl FromStr for DoubleWarehouse {
     type Err = ();
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let mut walls = HashSet::new();
-        let mut boxes = HashSet::new();
-        let mut robot = (0, 0);
-        let mut max_r = 0;
-        let mut max_c = 0;
+        let (walls, boxes, robot, max_r, max_c) = DoubleWarehouse::parse_warehouse(input);
 
-        for (r, row) in input.lines().enumerate() {
-            for (c, char) in row.chars().enumerate() {
-                match char {
-                    '#' => {
-                        walls.insert((r, c));
-                    }
-                    '[' => {
-                        boxes.insert((r, c));
-                    }
-                    '@' => robot = (r, c),
-                    _ => {}
-                }
-                max_c = max_c.max(c);
-            }
-            max_r = max_r.max(r);
-        }
-
-        Ok(DoubleGrid {
+        Ok(DoubleWarehouse {
             walls,
             boxes,
             robot,
@@ -257,7 +249,7 @@ impl FromStr for DoubleGrid {
     }
 }
 
-impl Grid for DoubleGrid {
+impl Warehouse for DoubleWarehouse {
     fn boxes(&self) -> HashSet<Coordinate> {
         self.boxes.clone()
     }
@@ -289,33 +281,33 @@ impl Grid for DoubleGrid {
     }
 
     fn move_robot(&self, mv: &Move) -> Self {
-        let mut new_grid = self.clone();
+        let mut new_warehouse = self.clone();
         if let Some(new_pos) = mv.apply_to(&self.robot, self.bounds) {
             if self.walls.contains(&new_pos) {
-                return new_grid;
+                return new_warehouse;
             }
 
             let possible_start_of_box = (new_pos.0, new_pos.1 - 1);
-            if (self.boxes.contains(&new_pos) && !new_grid.move_box(&new_pos, &mv))
+            if (self.boxes.contains(&new_pos) && !new_warehouse.move_box(&new_pos, &mv))
                 || (self.boxes.contains(&possible_start_of_box)
-                    && !new_grid.move_box(&possible_start_of_box, &mv))
+                    && !new_warehouse.move_box(&possible_start_of_box, &mv))
             {
                 // move_boxes may partially apply some moves
                 return self.clone();
             }
 
-            new_grid.robot = new_pos;
+            new_warehouse.robot = new_pos;
         }
 
-        new_grid
+        new_warehouse
     }
 }
 
-fn parse_input(input: &String) -> (SingleGrid, Vec<Move>) {
-    let (grid, moves) = input.split_once("\n\n").unwrap();
+fn parse_input(input: &String) -> (SingleWarehouse, Vec<Move>) {
+    let (warehouse, moves) = input.split_once("\n\n").unwrap();
 
     (
-        grid.parse().unwrap(),
+        warehouse.parse().unwrap(),
         moves.chars().flat_map(|char| char.try_into()).collect(),
     )
 }
@@ -324,7 +316,7 @@ fn parse_input(input: &String) -> (SingleGrid, Vec<Move>) {
 mod tests {
     use crate::day_15::*;
     
-    fn small_example_grid() -> SingleGrid {
+    fn small_example_warehouse() -> SingleWarehouse {
         #[rustfmt::skip]
         let walls = vec![
             (0, 0),(0, 1),(0, 2),(0, 3),(0, 4),(0, 5),(0, 6),(0, 7),
@@ -337,7 +329,7 @@ mod tests {
             (7, 0),(7, 1),(7, 2),(7, 3),(7, 4),(7, 5),(7, 6),(7, 7),
         ];
 
-        SingleGrid {
+        SingleWarehouse {
             walls: walls.into_iter().collect(),
             boxes: vec![(1, 3), (1, 5), (2, 4), (3, 4), (4, 4), (5, 4)]
                 .into_iter()
@@ -368,59 +360,59 @@ mod tests {
 <^^>>>vv<v>>v<<"
             .to_string();
 
-        let (grid, moves) = parse_input(&input);
-        assert_eq!(grid, small_example_grid());
+        let (warehouse, moves) = parse_input(&input);
+        assert_eq!(warehouse, small_example_warehouse());
 
         assert_eq!(moves, small_example_moves());
     }
 
     #[test]
     fn can_apply_move_into_empty() {
-        let grid = small_example_grid();
-        let moved_up = grid.move_robot(&Up);
+        let warehouse = small_example_warehouse();
+        let moved_up = warehouse.move_robot(&Up);
 
-        assert_eq!(moved_up.walls, grid.walls);
-        assert_eq!(moved_up.boxes, grid.boxes);
+        assert_eq!(moved_up.walls, warehouse.walls);
+        assert_eq!(moved_up.boxes, warehouse.boxes);
         assert_eq!(moved_up.robot, (1, 2));
 
-        let moved_right = grid.move_robot(&Right);
+        let moved_right = warehouse.move_robot(&Right);
 
-        assert_eq!(moved_right.walls, grid.walls);
-        assert_eq!(moved_right.boxes, grid.boxes);
+        assert_eq!(moved_right.walls, warehouse.walls);
+        assert_eq!(moved_right.boxes, warehouse.boxes);
         assert_eq!(moved_right.robot, (2, 3));
 
-        let moved_down = grid.move_robot(&Down);
+        let moved_down = warehouse.move_robot(&Down);
 
-        assert_eq!(moved_down.walls, grid.walls);
-        assert_eq!(moved_down.boxes, grid.boxes);
+        assert_eq!(moved_down.walls, warehouse.walls);
+        assert_eq!(moved_down.boxes, warehouse.boxes);
         assert_eq!(moved_down.robot, (3, 2));
 
         let moved_left = moved_up.move_robot(&Left);
 
-        assert_eq!(moved_left.walls, grid.walls);
-        assert_eq!(moved_left.boxes, grid.boxes);
+        assert_eq!(moved_left.walls, warehouse.walls);
+        assert_eq!(moved_left.boxes, warehouse.boxes);
         assert_eq!(moved_left.robot, (1, 1));
     }
 
     #[test]
     fn move_is_blocked_by_walls() {
-        let grid = small_example_grid();
-        let move_attempted = grid.move_robot(&Left);
+        let warehouse = small_example_warehouse();
+        let move_attempted = warehouse.move_robot(&Left);
 
-        assert_eq!(move_attempted, grid);
+        assert_eq!(move_attempted, warehouse);
     }
 
     #[test]
     fn can_push_boxes() {
-        let grid = small_example_grid();
+        let warehouse = small_example_warehouse();
 
-        let mut expected_boxes = grid.boxes.clone();
+        let mut expected_boxes = warehouse.boxes.clone();
         expected_boxes.remove(&(1, 3));
         expected_boxes.insert((1, 4));
 
-        let single_box_moved = grid.move_robot(&Up).move_robot(&Right);
+        let single_box_moved = warehouse.move_robot(&Up).move_robot(&Right);
 
-        assert_eq!(single_box_moved.walls, grid.walls);
+        assert_eq!(single_box_moved.walls, warehouse.walls);
         assert_eq!(single_box_moved.boxes, expected_boxes);
         assert_eq!(single_box_moved.robot, (1, 3));
 
@@ -429,7 +421,7 @@ mod tests {
         expected_boxes.remove(&(1, 4));
         expected_boxes.insert((1, 6));
 
-        assert_eq!(multi_boxes_moved.walls, grid.walls);
+        assert_eq!(multi_boxes_moved.walls, warehouse.walls);
         assert_eq!(multi_boxes_moved.boxes, expected_boxes);
         assert_eq!(multi_boxes_moved.robot, (1, 4));
 
@@ -441,23 +433,24 @@ mod tests {
     //noinspection SpellCheckingInspection
     #[test]
     fn can_apply_move_list() {
-        let small_grid = small_example_grid();
+        let small_warehouse = small_example_warehouse();
         let small_moves = small_example_moves();
 
         assert_eq!(
-            small_grid.apply_moves(&small_moves),
+            small_warehouse.apply_moves(&small_moves),
             small_example_after_moves()
         );
 
-        let (larger_grid, larger_moves) = larger_example();
+        let (larger_warehouse, larger_moves) = larger_example();
 
         assert_eq!(
-            larger_grid.apply_moves(&larger_moves),
+            larger_warehouse.apply_moves(&larger_moves),
             larger_example_after_moves()
         );
     }
 
-    fn larger_example() -> (SingleGrid, Vec<Move>) {
+    //noinspection SpellCheckingInspection
+    fn larger_example() -> (SingleWarehouse, Vec<Move>) {
         parse_input(
             &"##########
 #..O..O.O#
@@ -485,8 +478,8 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
         )
     }
 
-    fn larger_example_after_moves() -> SingleGrid {
-        SingleGrid::from_str(
+    fn larger_example_after_moves() -> SingleWarehouse {
+        SingleWarehouse::from_str(
             "##########
 #.O.O.OOO#
 #........#
@@ -501,8 +494,8 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
         .unwrap()
     }
 
-    fn small_example_after_moves() -> SingleGrid {
-        SingleGrid::from_str(
+    fn small_example_after_moves() -> SingleWarehouse {
+        SingleWarehouse::from_str(
             "########
 #....OO#
 ##.....#
@@ -522,8 +515,8 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
     }
 
     #[test]
-    fn can_double_grid() {
-        let grid = example_to_double();
+    fn can_double_warehouse() {
+        let warehouse = example_to_double();
 
         // ##############
         // ##......##..##
@@ -532,27 +525,27 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
         // ##....[]....##
         // ##..........##
         // ##############
-        let double_grid = grid.double();
+        let double_warehouse = warehouse.double();
 
-        assert_eq!(double_grid.walls.len(), 50);
+        assert_eq!(double_warehouse.walls.len(), 50);
 
         assert!(
-            double_grid.walls.contains(&(1, 8)),
+            double_warehouse.walls.contains(&(1, 8)),
             "Inner wall should have first half at (1,8)"
         );
         assert!(
-            double_grid.walls.contains(&(1, 9)),
+            double_warehouse.walls.contains(&(1, 9)),
             "Inner wall should have second half at (1,9)"
         );
 
-        assert_eq!(double_grid.robot, (3, 10));
+        assert_eq!(double_warehouse.robot, (3, 10));
 
         let expected_boxes = vec![(3, 6), (3, 8), (4, 6)].into_iter().collect();
-        assert_eq!(double_grid.boxes, expected_boxes)
+        assert_eq!(double_warehouse.boxes, expected_boxes)
     }
 
-    fn example_to_double() -> SingleGrid {
-        SingleGrid::from_str(
+    fn example_to_double() -> SingleWarehouse {
+        SingleWarehouse::from_str(
             "#######
 #...#.#
 #.....#
@@ -565,7 +558,7 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
     }
 
     #[test]
-    fn can_move_boxes_on_double_grid() {
+    fn can_move_boxes_on_double_warehouse() {
         let start = example_to_double().double();
 
         let expected_boxes = vec![(3, 5), (3, 7), (4, 6)].into_iter().collect();
@@ -580,8 +573,8 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
     }
 
     #[test]
-    fn can_parse_double_grid() {
-        let actual = DoubleGrid::from_str(
+    fn can_parse_double_warehouse() {
+        let actual = DoubleWarehouse::from_str(
             "##############
 ##......##..##
 ##..........##
@@ -598,11 +591,11 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
     }
 
     #[test]
-    fn can_apply_moves_to_double_grid() {
-        let (larger_grid, larger_moves) = larger_example();
-        let actual = larger_grid.double().apply_moves(&larger_moves);
+    fn can_apply_moves_to_double_warehouse() {
+        let (larger_warehouse, larger_moves) = larger_example();
+        let actual = larger_warehouse.double().apply_moves(&larger_moves);
 
-        let expected = DoubleGrid::from_str(
+        let expected = DoubleWarehouse::from_str(
             "####################
 ##[].......[].[][]##
 ##[]...........[].##
