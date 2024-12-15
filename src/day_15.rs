@@ -48,7 +48,7 @@ impl Move {
         }
     }
 
-    fn apply_to(&self, (r, c): Coordinate, (max_r, max_c): (usize, usize)) -> Option<Coordinate> {
+    fn apply_to(&self, (r, c): &Coordinate, (max_r, max_c): (usize, usize)) -> Option<Coordinate> {
         let (dr, dc) = self.delta();
 
         let r1 = r.checked_add_signed(dr).filter(|&r| r < max_r);
@@ -123,9 +123,32 @@ impl Grid {
         println!()
     }
 
-    fn apply(&self, mv: Move) -> Self {
+    fn move_box(&mut self, pos: &Coordinate, mv: &Move) -> bool {
+        if let Some(new_pos) = mv.apply_to(pos, self.bounds) {
+            if self.walls.contains(&new_pos) {
+                false
+            } else if self.boxes.contains(&new_pos) && !self.move_box(&new_pos, &mv) {
+                false
+            } else {
+                self.boxes.remove(&pos);
+                self.boxes.insert(new_pos)
+            }
+        } else {
+            false
+        }
+    }
+
+    fn move_robot(&self, mv: Move) -> Self {
         let mut new_grid = self.clone();
-        if let Some(new_pos) = mv.apply_to(self.robot, self.bounds) {
+        if let Some(new_pos) = mv.apply_to(&self.robot, self.bounds) {
+            if self.walls.contains(&new_pos) {
+                return new_grid;
+            }
+
+            if self.boxes.contains(&new_pos) && !new_grid.move_box(&new_pos, &mv) {
+                return new_grid;
+            }
+
             new_grid.robot = new_pos
         }
 
@@ -199,28 +222,64 @@ mod tests {
     #[test]
     fn can_apply_move_into_empty() {
         let grid = small_example_grid();
-        let moved_up = grid.apply(Up);
+        let moved_up = grid.move_robot(Up);
 
         assert_eq!(moved_up.walls, grid.walls);
         assert_eq!(moved_up.boxes, grid.boxes);
         assert_eq!(moved_up.robot, (1, 2));
 
-        let moved_right = grid.apply(Right);
+        let moved_right = grid.move_robot(Right);
 
         assert_eq!(moved_right.walls, grid.walls);
         assert_eq!(moved_right.boxes, grid.boxes);
         assert_eq!(moved_right.robot, (2, 3));
 
-        let moved_down = grid.apply(Down);
+        let moved_down = grid.move_robot(Down);
 
         assert_eq!(moved_down.walls, grid.walls);
         assert_eq!(moved_down.boxes, grid.boxes);
         assert_eq!(moved_down.robot, (3, 2));
 
-        let moved_left = moved_up.apply(Left);
+        let moved_left = moved_up.move_robot(Left);
 
         assert_eq!(moved_left.walls, grid.walls);
         assert_eq!(moved_left.boxes, grid.boxes);
         assert_eq!(moved_left.robot, (1, 1));
+    }
+
+    #[test]
+    fn move_is_blocked_by_walls() {
+        let grid = small_example_grid();
+        let move_attempted = grid.move_robot(Left);
+
+        assert_eq!(move_attempted, grid);
+    }
+
+    #[test]
+    fn can_push_boxes() {
+        let grid = small_example_grid();
+
+        let mut expected_boxes = grid.boxes.clone();
+        expected_boxes.remove(&(1, 3));
+        expected_boxes.insert((1, 4));
+
+        let single_box_moved = grid.move_robot(Up).move_robot(Right);
+
+        assert_eq!(single_box_moved.walls, grid.walls);
+        assert_eq!(single_box_moved.boxes, expected_boxes);
+        assert_eq!(single_box_moved.robot, (1, 3));
+
+        let multi_boxes_moved = single_box_moved.move_robot(Right);
+
+        expected_boxes.remove(&(1, 4));
+        expected_boxes.insert((1, 6));
+
+        assert_eq!(multi_boxes_moved.walls, grid.walls);
+        assert_eq!(multi_boxes_moved.boxes, expected_boxes);
+        assert_eq!(multi_boxes_moved.robot, (1, 4));
+
+        let boxes_blocked = multi_boxes_moved.move_robot(Right);
+
+        assert_eq!(boxes_blocked, multi_boxes_moved);
     }
 }
