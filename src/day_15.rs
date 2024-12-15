@@ -1,6 +1,15 @@
 //! This is my solution for [Advent of Code - Day 15: _Warehouse Woes_](https://adventofcode.com/2024/day/15)
 //!
+//! [`parse_input`] uses [`SingleWarehouse::from_str`] and [`Move::try_from`] to parse the two sections of the input.
 //!
+//! [`Warehouse`] holds common logic for both parts' warehouse implementations. [`Warehouse::sum_gps`] provides the
+//! puzzle solution for both parts, deferring to [`WarehouseExtensions::apply_moves`], and the part specific
+//! implementations of [Warehouse::move_robot] and [`Warehouse::move_box`].
+//!
+//! [`SingleWarehouse`] provides the implementation for part 1.
+//!
+//! [`DoubleWarehouse`] provides the implementation for part 2, with [`SingleWarehouse::double`] to convert the
+//! representation.
 
 use crate::day_15::Move::{Down, Left, Right, Up};
 use std::collections::HashSet;
@@ -26,6 +35,7 @@ pub fn run() {
     )
 }
 
+/// Represents one of the move steps of the robot
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 enum Move {
     Up,
@@ -49,6 +59,7 @@ impl TryFrom<char> for Move {
 }
 
 impl Move {
+    /// Represent the move as the delta to be applied to a [`Coordinate`]
     fn delta(&self) -> (isize, isize) {
         match self {
             Up => (-1, 0),
@@ -58,6 +69,8 @@ impl Move {
         }
     }
 
+    /// Return the [`Coordinate`] after moving the provided origin in this direction, `None` if the move is outside
+    /// the warehouse.
     fn apply_to(&self, (r, c): &Coordinate, (max_r, max_c): (usize, usize)) -> Option<Coordinate> {
         let (dr, dc) = self.delta();
 
@@ -68,17 +81,24 @@ impl Move {
     }
 }
 
+/// Coordinates of a position in the warehouse
 type Coordinate = (usize, usize);
 
 trait Warehouse {
+    /// Accessor needed by [`Warehouse::sum_gps`]
     fn boxes(&self) -> HashSet<Coordinate>;
+    /// Move a box in the provided direction if not blocked, pushing further boxes as needed
     fn move_box(&mut self, pos: &Coordinate, mv: &Move) -> bool;
+    /// Move a robot in the provided direction if not blocked, pushing boxes as needed
     fn move_robot(&self, mv: &Move) -> Self;
 
+    /// The "GPS" coordinates of all boxes in the [`Warehouse`]
     fn sum_gps(&self) -> usize {
         self.boxes().iter().map(|&(r, c)| 100 * r + c).sum()
     }
 
+    /// Common logic for parsing a [`Warehouse`], used by [`SingleWarehouse::from_str`], and
+    /// [`DoubleWarehouse::from_str`].
     fn parse_warehouse(
         input: &str,
     ) -> (
@@ -114,11 +134,13 @@ trait Warehouse {
     }
 }
 
+/// Helper to enable providing a common implementation of applying moves to `Warehouse` + `Clone`
 trait WarehouseExtensions {
     fn apply_moves(&self, moves: &Vec<Move>) -> Self;
 }
 
 impl<T: Warehouse + Clone> WarehouseExtensions for T {
+    /// Return a copy of this [`Warehouse`] after the robot has followed the list of moves
     fn apply_moves(&self, moves: &Vec<Move>) -> Self {
         moves
             .iter()
@@ -126,6 +148,7 @@ impl<T: Warehouse + Clone> WarehouseExtensions for T {
     }
 }
 
+/// Warehouse implementation of part 1
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct SingleWarehouse {
     walls: HashSet<Coordinate>,
@@ -169,6 +192,7 @@ impl SingleWarehouse {
         println!()
     }
 
+    /// Expand this warehouse into the doubled form used for part 2
     fn double(&self) -> DoubleWarehouse {
         let walls = self
             .walls
@@ -189,10 +213,12 @@ impl SingleWarehouse {
 }
 
 impl Warehouse for SingleWarehouse {
+    /// Provide common access to warehouse boxes
     fn boxes(&self) -> HashSet<Coordinate> {
         self.boxes.clone()
     }
 
+    /// Recursively move boxes, changes will only be made if there is space to move all boxes
     fn move_box(&mut self, pos: &Coordinate, mv: &Move) -> bool {
         if let Some(new_pos) = mv.apply_to(pos, self.bounds) {
             if self.walls.contains(&new_pos) {
@@ -208,6 +234,8 @@ impl Warehouse for SingleWarehouse {
         }
     }
 
+    /// Apply a move to the robot in the warehouse, moving boxes if needed. This will be a no-op if the move is
+    /// blocked by a wall, or any of the box moves are.
     fn move_robot(&self, mv: &Move) -> Self {
         let mut new_warehouse = self.clone();
         if let Some(new_pos) = mv.apply_to(&self.robot, self.bounds) {
@@ -250,10 +278,13 @@ impl FromStr for DoubleWarehouse {
 }
 
 impl Warehouse for DoubleWarehouse {
+    /// Provide common access to warehouse boxes
     fn boxes(&self) -> HashSet<Coordinate> {
         self.boxes.clone()
     }
 
+    /// Move this box, and push any box that is part in either of the two destination squares. If this fails, some
+    /// boxes may have been moved and the current warehouse should be considered invalid.
     fn move_box(&mut self, pos: &Coordinate, mv: &Move) -> bool {
         if let Some(left_new_pos) = mv.apply_to(pos, self.bounds) {
             let right_new_pos = (left_new_pos.0, left_new_pos.1 + 1);
@@ -280,6 +311,8 @@ impl Warehouse for DoubleWarehouse {
         }
     }
 
+    /// Move the robot pushing any boxes in the way. If the box move fails the partially updated grid is discarded
+    /// and an unmodified clone returned instead.
     fn move_robot(&self, mv: &Move) -> Self {
         let mut new_warehouse = self.clone();
         if let Some(new_pos) = mv.apply_to(&self.robot, self.bounds) {
@@ -303,6 +336,7 @@ impl Warehouse for DoubleWarehouse {
     }
 }
 
+/// Turn the puzzle input into a [`SingleWarehouse`], and list of [`Move`]s.
 fn parse_input(input: &String) -> (SingleWarehouse, Vec<Move>) {
     let (warehouse, moves) = input.split_once("\n\n").unwrap();
 
@@ -344,6 +378,78 @@ mod tests {
             Left, Up, Up, Right, Right, Right, Down, Down, Left, Down, Right, Right, Down, Left,
             Left,
         ]
+    }
+
+    fn small_example_after_moves() -> SingleWarehouse {
+        SingleWarehouse::from_str(
+            "########
+#....OO#
+##.....#
+#.....O#
+#.#O@..#
+#...O..#
+#...O..#
+########",
+        )
+        .unwrap()
+    }
+
+    //noinspection SpellCheckingInspection
+    fn larger_example() -> (SingleWarehouse, Vec<Move>) {
+        parse_input(
+            &"##########
+#..O..O.O#
+#......O.#
+#.OO..O.O#
+#..O@..O.#
+#O#..O...#
+#O..O..O.#
+#.OO.O.OO#
+#....O...#
+##########
+
+<vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^
+vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v
+><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<
+<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^
+^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><
+^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^
+>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^
+<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>
+^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>
+v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
+"
+            .to_string(),
+        )
+    }
+
+    fn larger_example_after_moves() -> SingleWarehouse {
+        SingleWarehouse::from_str(
+            "##########
+#.O.O.OOO#
+#........#
+#OO......#
+#OO@.....#
+#O#.....O#
+#O.....OO#
+#O.....OO#
+#OO....OO#
+##########",
+        )
+        .unwrap()
+    }
+
+    fn example_to_double() -> SingleWarehouse {
+        SingleWarehouse::from_str(
+            "#######
+#...#.#
+#.....#
+#..OO@#
+#..O..#
+#.....#
+#######",
+        )
+        .unwrap()
     }
 
     #[test]
@@ -430,7 +536,6 @@ mod tests {
         assert_eq!(boxes_blocked, multi_boxes_moved);
     }
 
-    //noinspection SpellCheckingInspection
     #[test]
     fn can_apply_move_list() {
         let small_warehouse = small_example_warehouse();
@@ -449,65 +554,6 @@ mod tests {
         );
     }
 
-    //noinspection SpellCheckingInspection
-    fn larger_example() -> (SingleWarehouse, Vec<Move>) {
-        parse_input(
-            &"##########
-#..O..O.O#
-#......O.#
-#.OO..O.O#
-#..O@..O.#
-#O#..O...#
-#O..O..O.#
-#.OO.O.OO#
-#....O...#
-##########
-
-<vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^
-vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v
-><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<
-<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^
-^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><
-^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^
->^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^
-<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>
-^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>
-v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
-"
-            .to_string(),
-        )
-    }
-
-    fn larger_example_after_moves() -> SingleWarehouse {
-        SingleWarehouse::from_str(
-            "##########
-#.O.O.OOO#
-#........#
-#OO......#
-#OO@.....#
-#O#.....O#
-#O.....OO#
-#O.....OO#
-#OO....OO#
-##########",
-        )
-        .unwrap()
-    }
-
-    fn small_example_after_moves() -> SingleWarehouse {
-        SingleWarehouse::from_str(
-            "########
-#....OO#
-##.....#
-#.....O#
-#.#O@..#
-#...O..#
-#...O..#
-########",
-        )
-        .unwrap()
-    }
-
     #[test]
     fn can_sum_gps() {
         assert_eq!(small_example_after_moves().sum_gps(), 2028);
@@ -517,14 +563,6 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
     #[test]
     fn can_double_warehouse() {
         let warehouse = example_to_double();
-
-        // ##############
-        // ##......##..##
-        // ##..........##
-        // ##....[][]@.##
-        // ##....[]....##
-        // ##..........##
-        // ##############
         let double_warehouse = warehouse.double();
 
         assert_eq!(double_warehouse.walls.len(), 50);
@@ -544,21 +582,8 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^
         assert_eq!(double_warehouse.boxes, expected_boxes)
     }
 
-    fn example_to_double() -> SingleWarehouse {
-        SingleWarehouse::from_str(
-            "#######
-#...#.#
-#.....#
-#..OO@#
-#..O..#
-#.....#
-#######",
-        )
-        .unwrap()
-    }
-
     #[test]
-    fn can_move_boxes_on_double_warehouse() {
+    fn can_move_boxes_in_double_warehouse() {
         let start = example_to_double().double();
 
         let expected_boxes = vec![(3, 5), (3, 7), (4, 6)].into_iter().collect();
