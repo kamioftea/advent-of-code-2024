@@ -2,7 +2,9 @@
 //!
 //!
 
-use std::collections::HashSet;
+use crate::day_16::Facing::*;
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashSet};
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -10,22 +12,179 @@ use std::fs;
 /// - The puzzle input is expected to be at `<project_root>/res/day-16-input`
 /// - It is expected this will be called by [`super::main()`] when the user elects to run day 16.
 pub fn run() {
-    let _contents = fs::read_to_string("res/day-16-input.txt").expect("Failed to read file");
+    let contents = fs::read_to_string("res/day-16-input.txt").expect("Failed to read file");
+    let maze = parse_input(&contents);
+
+    println!(
+        "The lowest scoring route scores {}",
+        maze.lowest_scoring_route()
+    )
 }
 
-type Coordinate = (usize, usize);
+type Coordinates = (usize, usize);
+
+trait ManhattanDistance {
+    fn manhattan_distance(&self, other: &Self) -> usize;
+}
+
+impl ManhattanDistance for Coordinates {
+    fn manhattan_distance(&self, other: &Self) -> usize {
+        let (r0, c0) = self;
+        let (r1, c1) = other;
+
+        r0.abs_diff(*r1) + c0.abs_diff(*c1)
+    }
+}
 
 #[derive(Eq, PartialEq, Debug)]
 struct Maze {
-    hedges: HashSet<Coordinate>,
-    start: Coordinate,
-    end: Coordinate,
+    hedges: HashSet<Coordinates>,
+    start: Coordinates,
+    end: Coordinates,
+    bounds: (usize, usize),
+}
+
+impl Maze {
+    fn lowest_scoring_route(&self) -> u32 {
+        let mut heap: BinaryHeap<Position> = BinaryHeap::new();
+        let mut visited = HashSet::new();
+        heap.push(self.starting_position());
+
+        while let Some(curr) = heap.pop() {
+            if curr.coordinates == self.end {
+                return curr.score;
+            }
+
+            for next in curr.next(self) {
+                if visited.insert((next.coordinates, next.facing)) {
+                    heap.push(next);
+                }
+            }
+        }
+
+        unreachable!("Failed to find route to end");
+    }
+
+    fn starting_position(&self) -> Position {
+        Position::new(
+            self.start.clone(),
+            East,
+            0,
+            self.start.manhattan_distance(&self.end),
+        )
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
+enum Facing {
+    North,
+    East,
+    South,
+    West,
+}
+
+impl Facing {
+    fn rotate_clockwise(&self) -> Facing {
+        match self {
+            North => East,
+            East => South,
+            South => West,
+            West => North,
+        }
+    }
+
+    fn rotate_counterclockwise(&self) -> Facing {
+        match self {
+            North => West,
+            East => North,
+            South => East,
+            West => South,
+        }
+    }
+
+    fn forwards(&self, (r, c): &Coordinates, maze: &Maze) -> Option<Coordinates> {
+        let (dr, dc) = match self {
+            North => (-1, 0),
+            East => (0, 1),
+            South => (1, 0),
+            West => (0, -1),
+        };
+
+        let (max_r, max_c) = maze.bounds;
+
+        let r1 = r.checked_add_signed(dr).filter(|&r| r < max_r);
+        let c1 = c.checked_add_signed(dc).filter(|&c| c < max_c);
+
+        r1.zip(c1).filter(|coords| !maze.hedges.contains(coords))
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+struct Position {
+    coordinates: Coordinates,
+    facing: Facing,
+    score: u32,
+    distance: usize,
+}
+
+impl Position {
+    fn next(&self, maze: &Maze) -> Vec<Position> {
+        vec![
+            Some(Position {
+                facing: self.facing.rotate_clockwise(),
+                score: self.score + 1000,
+                ..*self
+            }),
+            Some(Position {
+                facing: self.facing.rotate_counterclockwise(),
+                score: self.score + 1000,
+                ..*self
+            }),
+            self.facing
+                .forwards(&self.coordinates, maze)
+                .map(|coordinates| Position {
+                    coordinates,
+                    score: self.score + 1,
+                    distance: coordinates.manhattan_distance(&maze.end),
+                    facing: self.facing,
+                }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    pub fn new(coordinates: Coordinates, facing: Facing, score: u32, distance: usize) -> Self {
+        Self {
+            coordinates,
+            facing,
+            score,
+            distance,
+        }
+    }
+}
+
+impl Ord for Position {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .score
+            .cmp(&self.score)
+            .then_with(|| other.distance.cmp(&self.distance))
+    }
+}
+
+impl PartialOrd for Position {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 fn parse_input(input: &String) -> Maze {
     let mut hedges = HashSet::new();
     let mut start = (0, 0);
     let mut end = (0, 0);
+    let mut max_r = 0;
+    let mut max_c = 0;
 
     for (r, row) in input.lines().enumerate() {
         for (c, char) in row.chars().enumerate() {
@@ -37,10 +196,17 @@ fn parse_input(input: &String) -> Maze {
                 'E' => end = (r, c),
                 _ => {}
             }
+            max_c = max_c.max(c);
         }
+        max_r = max_r.max(r);
     }
 
-    Maze { hedges, start, end }
+    Maze {
+        hedges,
+        start,
+        end,
+        bounds: (max_r + 1, max_c + 1),
+    }
 }
 
 #[cfg(test)]
@@ -49,7 +215,6 @@ mod tests {
     use crate::helpers::test::assert_contains_in_any_order;
     
     fn example_maze() -> Maze {
-        // @formatter:off
         #[rustfmt::skip]
         let hedges = vec![
             ( 0,  0), ( 0,  1), ( 0,  2), ( 0,  3), ( 0,  4), ( 0,  5), ( 0,  6), ( 0,  7), ( 0,  8), ( 0,  9), ( 0, 10), ( 0, 11), ( 0, 12), ( 0, 13), ( 0, 14),
@@ -68,13 +233,36 @@ mod tests {
             (13,  0),                               (13,  4),                                                   (13, 10),                               (13, 14),
             (14,  0), (14,  1), (14,  2), (14,  3), (14,  4), (14,  5), (14,  6), (14,  7), (14,  8), (14,  9), (14, 10), (14, 11), (14, 12), (14, 13), (14, 14),
         ].into_iter().collect();
-        // @formatter:on
 
         Maze {
             hedges,
             start: (13, 1),
             end: (1, 13),
+            bounds: (15, 15),
         }
+    }
+
+    fn larger_example_maze() -> Maze {
+        parse_input(
+            &"#################
+#...#...#...#..E#
+#.#.#.#.#.#.#.#.#
+#.#.#.#...#...#.#
+#.#.#.#.###.#.#.#
+#...#.#.#.....#.#
+#.#.#.#.#.#####.#
+#.#...#.#.#.....#
+#.#.#####.#.###.#
+#.#.#.......#...#
+#.#.###.#####.###
+#.#.#...#.....#.#
+#.#.#.#####.###.#
+#.#.#.........#.#
+#.#.#.#########.#
+#S#.............#
+#################"
+                .to_string(),
+        )
     }
 
     #[test]
@@ -96,8 +284,40 @@ mod tests {
 ###############"
             .to_string();
 
-        assert_contains_in_any_order(parse_input(&input).hedges, example_maze().hedges);
-
         assert_eq!(parse_input(&input), example_maze())
+    }
+
+    #[test]
+    fn can_get_manhattan_distance() {
+        assert_eq!((0, 0).manhattan_distance(&(0, 0)), 0);
+        assert_eq!((13, 1).manhattan_distance(&(1, 13)), 24);
+        assert_eq!((13, 2).manhattan_distance(&(1, 13)), 23);
+    }
+
+    #[test]
+    fn can_get_next_moves() {
+        let maze = example_maze();
+        let start = example_maze().starting_position();
+        let expected = vec![
+            Position::new((13, 1), South, 1000, 24),
+            Position::new((13, 1), North, 1000, 24),
+            Position::new((13, 2), East, 1, 23),
+        ];
+
+        assert_contains_in_any_order(start.next(&maze), expected);
+
+        let start = Position::new((9, 1), North, 4, 20);
+        let expected = vec![
+            Position::new((9, 1), East, 1004, 20),
+            Position::new((9, 1), West, 1004, 20),
+        ];
+
+        assert_contains_in_any_order(start.next(&maze), expected);
+    }
+
+    #[test]
+    fn can_navigate_maze() {
+        assert_eq!(example_maze().lowest_scoring_route(), 7036);
+        assert_eq!(larger_example_maze().lowest_scoring_route(), 11048);
     }
 }
