@@ -3,8 +3,9 @@
 //!
 
 use crate::day_16::Facing::*;
+use itertools::Itertools;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -18,6 +19,11 @@ pub fn run() {
     println!(
         "The lowest scoring route scores {}",
         maze.lowest_scoring_route()
+    );
+
+    println!(
+        "There are {} tiles on the best routes",
+        maze.count_visited_by_best_routes()
     )
 }
 
@@ -64,6 +70,40 @@ impl Maze {
 
         unreachable!("Failed to find route to end");
     }
+    fn count_visited_by_best_routes(&self) -> usize {
+        let mut heap: BinaryHeap<Position> = BinaryHeap::new();
+        let mut visited: HashMap<(Coordinates, Facing), u32> = HashMap::new();
+        let mut lowest_score = u32::MAX;
+        let mut routes = Vec::new();
+
+        heap.push(self.starting_position());
+
+        while let Some(curr) = heap.pop() {
+            if curr.coordinates == self.end {
+                if curr.score < lowest_score {
+                    lowest_score = curr.score;
+                    routes = Vec::new();
+                }
+
+                if curr.score == lowest_score {
+                    routes.push(curr.visited.clone())
+                }
+            }
+
+            for next in curr.next(self) {
+                if curr.score < lowest_score
+                    && !visited
+                        .get(&(next.coordinates, next.facing))
+                        .is_some_and(|&s| s <= curr.score)
+                {
+                    visited.insert((next.coordinates, next.facing), next.score);
+                    heap.push(next);
+                }
+            }
+        }
+
+        routes.iter().flatten().unique().count()
+    }
 
     fn starting_position(&self) -> Position {
         Position::new(
@@ -71,6 +111,7 @@ impl Maze {
             East,
             0,
             self.start.manhattan_distance(&self.end),
+            vec![self.start.clone()],
         )
     }
 }
@@ -119,12 +160,13 @@ impl Facing {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 struct Position {
     coordinates: Coordinates,
     facing: Facing,
     score: u32,
     distance: usize,
+    visited: Vec<Coordinates>,
 }
 
 impl Position {
@@ -133,12 +175,12 @@ impl Position {
             Some(Position {
                 facing: self.facing.rotate_clockwise(),
                 score: self.score + 1000,
-                ..*self
+                ..self.clone()
             }),
             Some(Position {
                 facing: self.facing.rotate_counterclockwise(),
                 score: self.score + 1000,
-                ..*self
+                ..self.clone()
             }),
             self.facing
                 .forwards(&self.coordinates, maze)
@@ -147,6 +189,7 @@ impl Position {
                     score: self.score + 1,
                     distance: coordinates.manhattan_distance(&maze.end),
                     facing: self.facing,
+                    visited: [self.visited.clone(), vec![coordinates]].concat(),
                 }),
         ]
         .into_iter()
@@ -154,12 +197,19 @@ impl Position {
         .collect()
     }
 
-    pub fn new(coordinates: Coordinates, facing: Facing, score: u32, distance: usize) -> Self {
+    pub fn new(
+        coordinates: Coordinates,
+        facing: Facing,
+        score: u32,
+        distance: usize,
+        visited: Vec<Coordinates>,
+    ) -> Self {
         Self {
             coordinates,
             facing,
             score,
             distance,
+            visited,
         }
     }
 }
@@ -299,17 +349,35 @@ mod tests {
         let maze = example_maze();
         let start = example_maze().starting_position();
         let expected = vec![
-            Position::new((13, 1), South, 1000, 24),
-            Position::new((13, 1), North, 1000, 24),
-            Position::new((13, 2), East, 1, 23),
+            Position::new((13, 1), South, 1000, 24, vec![(13, 1)]),
+            Position::new((13, 1), North, 1000, 24, vec![(13, 1)]),
+            Position::new((13, 2), East, 1, 23, vec![(13, 1), (13, 2)]),
         ];
 
         assert_contains_in_any_order(start.next(&maze), expected);
 
-        let start = Position::new((9, 1), North, 4, 20);
+        let start = Position::new(
+            (9, 1),
+            North,
+            4,
+            20,
+            vec![(13, 1), (12, 1), (11, 1), (10, 1), (9, 1)],
+        );
         let expected = vec![
-            Position::new((9, 1), East, 1004, 20),
-            Position::new((9, 1), West, 1004, 20),
+            Position::new(
+                (9, 1),
+                East,
+                1004,
+                20,
+                vec![(13, 1), (12, 1), (11, 1), (10, 1), (9, 1)],
+            ),
+            Position::new(
+                (9, 1),
+                West,
+                1004,
+                20,
+                vec![(13, 1), (12, 1), (11, 1), (10, 1), (9, 1)],
+            ),
         ];
 
         assert_contains_in_any_order(start.next(&maze), expected);
@@ -319,5 +387,11 @@ mod tests {
     fn can_navigate_maze() {
         assert_eq!(example_maze().lowest_scoring_route(), 7036);
         assert_eq!(larger_example_maze().lowest_scoring_route(), 11048);
+    }
+
+    #[test]
+    fn can_find_visited_tiles() {
+        assert_eq!(example_maze().count_visited_by_best_routes(), 45);
+        assert_eq!(larger_example_maze().count_visited_by_best_routes(), 64);
     }
 }
