@@ -6,7 +6,7 @@ use crate::day_16::Facing::*;
 use itertools::Itertools;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::fs;
+use std::{fs, usize};
 
 /// The entry point for running the solutions with the 'real' puzzle input.
 ///
@@ -29,16 +29,62 @@ pub fn run() {
 
 type Coordinates = (usize, usize);
 
-trait ManhattanDistance {
+trait CoordinateExtensions {
     fn manhattan_distance(&self, other: &Self) -> usize;
+    fn turn_cost(&self, other: &Self, facing: &Facing) -> usize;
 }
 
-impl ManhattanDistance for Coordinates {
+impl CoordinateExtensions for Coordinates {
     fn manhattan_distance(&self, other: &Self) -> usize {
         let (r0, c0) = self;
         let (r1, c1) = other;
 
         r0.abs_diff(*r1) + c0.abs_diff(*c1)
+    }
+
+    fn turn_cost(&self, other: &Self, facing: &Facing) -> usize {
+        let (r0, c0) = self;
+        let (r1, c1) = other;
+
+        match (r0.cmp(&r1), c0.cmp(&c1)) {
+            (Ordering::Less, Ordering::Less) => match facing {
+                South | East => 1000,
+                North | West => 2000,
+            },
+            (Ordering::Less, Ordering::Equal) => match facing {
+                South => 0,
+                East | West => 1000,
+                North => 2000,
+            },
+            (Ordering::Less, Ordering::Greater) => match facing {
+                South | West => 1000,
+                North | East => 2000,
+            },
+            (Ordering::Equal, Ordering::Less) => match facing {
+                East => 0,
+                North | South => 1000,
+                West => 2000,
+            },
+            (Ordering::Equal, Ordering::Equal) => 0,
+            (Ordering::Equal, Ordering::Greater) => match facing {
+                West => 0,
+                North | South => 1000,
+                East => 2000,
+            },
+            (Ordering::Greater, Ordering::Less) => match facing {
+                North | East => 1000,
+                South | West => 2000,
+            },
+            (Ordering::Greater, Ordering::Equal) => match facing {
+                North => 0,
+                East | West => 1000,
+                South => 2000,
+            },
+            (Ordering::Greater, Ordering::Greater) => match facing {
+                North | West => 1000,
+                South | East => 2000,
+            },
+        }
     }
 }
 
@@ -51,7 +97,7 @@ struct Maze {
 }
 
 impl Maze {
-    fn lowest_scoring_route(&self) -> u32 {
+    fn lowest_scoring_route(&self) -> usize {
         let mut heap: BinaryHeap<Position> = BinaryHeap::new();
         let mut visited = HashSet::new();
         heap.push(self.starting_position());
@@ -70,10 +116,11 @@ impl Maze {
 
         unreachable!("Failed to find route to end");
     }
+    //noinspection RsDeprecation
     fn count_visited_by_best_routes(&self) -> usize {
         let mut heap: BinaryHeap<Position> = BinaryHeap::new();
-        let mut visited: HashMap<(Coordinates, Facing), u32> = HashMap::new();
-        let mut lowest_score = u32::MAX;
+        let mut visited: HashMap<(Coordinates, Facing), usize> = HashMap::new();
+        let mut lowest_score = usize::MAX;
         let mut routes = Vec::new();
 
         heap.push(self.starting_position());
@@ -91,12 +138,12 @@ impl Maze {
             }
 
             for next in curr.next(self) {
-                if curr.score < lowest_score
+                if (next.score + next.distance) <= lowest_score
                     && !visited
                         .get(&(next.coordinates, next.facing))
-                        .is_some_and(|&s| s <= curr.score)
+                        .is_some_and(|&s| s < next.score + next.distance)
                 {
-                    visited.insert((next.coordinates, next.facing), next.score);
+                    visited.insert((next.coordinates, next.facing), next.score + next.distance);
                     heap.push(next);
                 }
             }
@@ -110,7 +157,7 @@ impl Maze {
             self.start.clone(),
             East,
             0,
-            self.start.manhattan_distance(&self.end),
+            self.start.manhattan_distance(&self.end) + self.start.turn_cost(&self.end, &East),
             vec![self.start.clone()],
         )
     }
@@ -164,7 +211,7 @@ impl Facing {
 struct Position {
     coordinates: Coordinates,
     facing: Facing,
-    score: u32,
+    score: usize,
     distance: usize,
     visited: Vec<Coordinates>,
 }
@@ -175,11 +222,19 @@ impl Position {
             Some(Position {
                 facing: self.facing.rotate_clockwise(),
                 score: self.score + 1000,
+                distance: self.coordinates.manhattan_distance(&maze.end)
+                    + self
+                        .coordinates
+                        .turn_cost(&maze.end, &self.facing.rotate_clockwise()),
                 ..self.clone()
             }),
             Some(Position {
                 facing: self.facing.rotate_counterclockwise(),
                 score: self.score + 1000,
+                distance: self.coordinates.manhattan_distance(&maze.end)
+                    + self
+                        .coordinates
+                        .turn_cost(&maze.end, &self.facing.rotate_counterclockwise()),
                 ..self.clone()
             }),
             self.facing
@@ -187,7 +242,8 @@ impl Position {
                 .map(|coordinates| Position {
                     coordinates,
                     score: self.score + 1,
-                    distance: coordinates.manhattan_distance(&maze.end),
+                    distance: coordinates.manhattan_distance(&maze.end)
+                        + coordinates.turn_cost(&maze.end, &self.facing),
                     facing: self.facing,
                     visited: [self.visited.clone(), vec![coordinates]].concat(),
                 }),
@@ -200,7 +256,7 @@ impl Position {
     pub fn new(
         coordinates: Coordinates,
         facing: Facing,
-        score: u32,
+        score: usize,
         distance: usize,
         visited: Vec<Coordinates>,
     ) -> Self {
@@ -216,10 +272,7 @@ impl Position {
 
 impl Ord for Position {
     fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .score
-            .cmp(&self.score)
-            .then_with(|| other.distance.cmp(&self.distance))
+        (other.score + other.distance).cmp(&(self.score + self.distance))
     }
 }
 
@@ -267,21 +320,21 @@ mod tests {
     fn example_maze() -> Maze {
         #[rustfmt::skip]
         let hedges = vec![
-            ( 0,  0), ( 0,  1), ( 0,  2), ( 0,  3), ( 0,  4), ( 0,  5), ( 0,  6), ( 0,  7), ( 0,  8), ( 0,  9), ( 0, 10), ( 0, 11), ( 0, 12), ( 0, 13), ( 0, 14),
-            ( 1,  0),                                                                       ( 1,  8),                                                   ( 1, 14),
-            ( 2,  0),           ( 2,  2),           ( 2,  4), ( 2,  5), ( 2,  6),           ( 2,  8),           ( 2, 10), ( 2, 11), ( 2, 12),           ( 2, 14),
-            ( 3,  0),                                                   ( 3,  6),           ( 3,  8),                               ( 3, 12),           ( 3, 14),
-            ( 4,  0),           ( 4,  2), ( 4,  3), ( 4,  4),           ( 4,  6), ( 4,  7), ( 4,  8), ( 4,  9), ( 4, 10),           ( 4, 12),           ( 4, 14),
-            ( 5,  0),           ( 5,  2),           ( 5,  4),                                                                       ( 5, 12),           ( 5, 14),
-            ( 6,  0),           ( 6,  2),           ( 6,  4), ( 6,  5), ( 6,  6), ( 6,  7), ( 6,  8),           ( 6, 10), ( 6, 11), ( 6, 12),           ( 6, 14),
-            ( 7,  0),                                                                                                               ( 7, 12),           ( 7, 14),
-            ( 8,  0), ( 8,  1), ( 8,  2),           ( 8,  4),           ( 8,  6), ( 8,  7), ( 8,  8), ( 8,  9), ( 8, 10),           ( 8, 12),           ( 8, 14),
-            ( 9,  0),                               ( 9,  4),                                                   ( 9, 10),           ( 9, 12),           ( 9, 14),
-            (10,  0),           (10,  2),           (10,  4),           (10,  6), (10,  7), (10,  8),           (10, 10),           (10, 12),           (10, 14),
-            (11,  0),                                                   (11,  6),                               (11, 10),           (11, 12),           (11, 14),
-            (12,  0),           (12,  2), (12,  3), (12,  4),           (12,  6),           (12,  8),           (12, 10),           (12, 12),           (12, 14),
-            (13,  0),                               (13,  4),                                                   (13, 10),                               (13, 14),
-            (14,  0), (14,  1), (14,  2), (14,  3), (14,  4), (14,  5), (14,  6), (14,  7), (14,  8), (14,  9), (14, 10), (14, 11), (14, 12), (14, 13), (14, 14),
+( 0, 0),( 0, 1),( 0, 2),( 0, 3),( 0, 4),( 0, 5),( 0, 6),( 0, 7),( 0, 8),( 0, 9),( 0,10),( 0,11),( 0,12),( 0,13),( 0,14),
+( 1, 0),                                                        ( 1, 8),                                        ( 1,14),
+( 2, 0),        ( 2, 2),        ( 2, 4),( 2, 5),( 2, 6),        ( 2, 8),        ( 2,10),( 2,11),( 2,12),        ( 2,14),
+( 3, 0),                                        ( 3, 6),        ( 3, 8),                        ( 3,12),        ( 3,14),
+( 4, 0),        ( 4, 2),( 4, 3),( 4, 4),        ( 4, 6),( 4, 7),( 4, 8),( 4, 9),( 4,10),        ( 4,12),        ( 4,14),
+( 5, 0),        ( 5, 2),        ( 5, 4),                                                        ( 5,12),        ( 5,14),
+( 6, 0),        ( 6, 2),        ( 6, 4),( 6, 5),( 6, 6),( 6, 7),( 6, 8),        ( 6,10),( 6,11),( 6,12),        ( 6,14),
+( 7, 0),                                                                                        ( 7,12),        ( 7,14),
+( 8, 0),( 8, 1),( 8, 2),        ( 8, 4),        ( 8, 6),( 8, 7),( 8, 8),( 8, 9),( 8,10),        ( 8,12),        ( 8,14),
+( 9, 0),                        ( 9, 4),                                        ( 9,10),        ( 9,12),        ( 9,14),
+(10, 0),        (10, 2),        (10, 4),        (10, 6),(10, 7),(10, 8),        (10,10),        (10,12),        (10,14),
+(11, 0),                                        (11, 6),                        (11,10),        (11,12),        (11,14),
+(12, 0),        (12, 2),(12, 3),(12, 4),        (12, 6),        (12, 8),        (12,10),        (12,12),        (12,14),
+(13, 0),                        (13, 4),                                        (13,10),                        (13,14),
+(14, 0),(14, 1),(14, 2),(14, 3),(14, 4),(14, 5),(14, 6),(14, 7),(14, 8),(14, 9),(14,10),(14,11),(14,12),(14,13),(14,14),
         ].into_iter().collect();
 
         Maze {
@@ -345,13 +398,65 @@ mod tests {
     }
 
     #[test]
+    fn can_get_turn_cost() {
+        // (0,0) (0,1) (0,2)
+        // (1,0) (1,1) (1,2)
+        // (2,0) (2,1) (2,2)
+
+        assert_eq!((0, 0).turn_cost(&(1, 1), &North), 2000);
+        assert_eq!((0, 0).turn_cost(&(1, 1), &East), 1000);
+        assert_eq!((0, 0).turn_cost(&(1, 1), &South), 1000);
+        assert_eq!((0, 0).turn_cost(&(1, 1), &West), 2000);
+
+        assert_eq!((0, 1).turn_cost(&(1, 1), &North), 2000);
+        assert_eq!((0, 1).turn_cost(&(1, 1), &East), 1000);
+        assert_eq!((0, 1).turn_cost(&(1, 1), &South), 0);
+        assert_eq!((0, 1).turn_cost(&(1, 1), &West), 1000);
+
+        assert_eq!((0, 2).turn_cost(&(1, 1), &North), 2000);
+        assert_eq!((0, 2).turn_cost(&(1, 1), &East), 2000);
+        assert_eq!((0, 2).turn_cost(&(1, 1), &South), 1000);
+        assert_eq!((0, 2).turn_cost(&(1, 1), &West), 1000);
+
+        assert_eq!((1, 0).turn_cost(&(1, 1), &North), 1000);
+        assert_eq!((1, 0).turn_cost(&(1, 1), &East), 0);
+        assert_eq!((1, 0).turn_cost(&(1, 1), &South), 1000);
+        assert_eq!((1, 0).turn_cost(&(1, 1), &West), 2000);
+
+        assert_eq!((1, 1).turn_cost(&(1, 1), &North), 0);
+        assert_eq!((1, 1).turn_cost(&(1, 1), &East), 0);
+        assert_eq!((1, 1).turn_cost(&(1, 1), &South), 0);
+        assert_eq!((1, 1).turn_cost(&(1, 1), &West), 0);
+
+        assert_eq!((1, 2).turn_cost(&(1, 1), &North), 1000);
+        assert_eq!((1, 2).turn_cost(&(1, 1), &East), 2000);
+        assert_eq!((1, 2).turn_cost(&(1, 1), &South), 1000);
+        assert_eq!((1, 2).turn_cost(&(1, 1), &West), 0);
+
+        assert_eq!((2, 0).turn_cost(&(1, 1), &North), 1000);
+        assert_eq!((2, 0).turn_cost(&(1, 1), &East), 1000);
+        assert_eq!((2, 0).turn_cost(&(1, 1), &South), 2000);
+        assert_eq!((2, 0).turn_cost(&(1, 1), &West), 2000);
+
+        assert_eq!((2, 1).turn_cost(&(1, 1), &North), 0);
+        assert_eq!((2, 1).turn_cost(&(1, 1), &East), 1000);
+        assert_eq!((2, 1).turn_cost(&(1, 1), &South), 2000);
+        assert_eq!((2, 1).turn_cost(&(1, 1), &West), 1000);
+
+        assert_eq!((2, 2).turn_cost(&(1, 1), &North), 1000);
+        assert_eq!((2, 2).turn_cost(&(1, 1), &East), 2000);
+        assert_eq!((2, 2).turn_cost(&(1, 1), &South), 2000);
+        assert_eq!((2, 2).turn_cost(&(1, 1), &West), 1000);
+    }
+
+    #[test]
     fn can_get_next_moves() {
         let maze = example_maze();
         let start = example_maze().starting_position();
         let expected = vec![
-            Position::new((13, 1), South, 1000, 24, vec![(13, 1)]),
-            Position::new((13, 1), North, 1000, 24, vec![(13, 1)]),
-            Position::new((13, 2), East, 1, 23, vec![(13, 1), (13, 2)]),
+            Position::new((13, 1), South, 1000, 2024, vec![(13, 1)]),
+            Position::new((13, 1), North, 1000, 1024, vec![(13, 1)]),
+            Position::new((13, 2), East, 1, 1023, vec![(13, 1), (13, 2)]),
         ];
 
         assert_contains_in_any_order(start.next(&maze), expected);
@@ -359,23 +464,23 @@ mod tests {
         let start = Position::new(
             (9, 1),
             North,
-            4,
-            20,
+            1004,
+            1020,
             vec![(13, 1), (12, 1), (11, 1), (10, 1), (9, 1)],
         );
         let expected = vec![
             Position::new(
                 (9, 1),
                 East,
-                1004,
-                20,
+                2004,
+                1020,
                 vec![(13, 1), (12, 1), (11, 1), (10, 1), (9, 1)],
             ),
             Position::new(
                 (9, 1),
                 West,
-                1004,
-                20,
+                2004,
+                2020,
                 vec![(13, 1), (12, 1), (11, 1), (10, 1), (9, 1)],
             ),
         ];
