@@ -733,3 +733,19 @@ fn can_apply_moves_to_double_warehouse() {
 Today ended up being a lot of code, but each individual bit was moving towards a whole, and I got into a good flow
 state, I'm glad it was a weekend though. It was good to remind myself about some of the intricacies of rust traits,
 which I'm sure I'll find more usage for in later puzzles.
+
+## Minor update 16th December - Supertraits
+
+I found a better way of requiring clone for `Warehouse::apply_moves` than using `WarehouseExtensions`. I failed to
+find the supertrait syntax when looking yesterday. Using this I can require anything that implements `Warehouse`
+also implements `Clone`, and move `apply_moves` into the `impl Warehouse` block.
+
+```rust
+trait Warehouse: Clone {
+    fn apply_moves(&self, moves: &Vec<Move>) -> Self {
+        moves
+            .iter()
+            .fold(self.clone(), |warehouse, mv| warehouse.move_robot(mv))
+    }
+}
+```

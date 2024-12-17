@@ -3,7 +3,7 @@
 //! [`parse_input`] uses [`SingleWarehouse::from_str`] and [`Move::try_from`] to parse the two sections of the input.
 //!
 //! [`Warehouse`] holds common logic for both parts' warehouse implementations. [`Warehouse::sum_gps`] provides the
-//! puzzle solution for both parts, deferring to [`WarehouseExtensions::apply_moves`], and the part specific
+//! puzzle solution for both parts, deferring to [`Warehouse::apply_moves`], and the part specific
 //! implementations of [Warehouse::move_robot] and [`Warehouse::move_box`].
 //!
 //! [`SingleWarehouse`] provides the implementation for part 1.
@@ -84,7 +84,7 @@ impl Move {
 /// Coordinates of a position in the warehouse
 type Coordinate = (usize, usize);
 
-trait Warehouse {
+trait Warehouse: Clone {
     /// Accessor needed by [`Warehouse::sum_gps`]
     fn boxes(&self) -> HashSet<Coordinate>;
     /// Move a box in the provided direction if not blocked, pushing further boxes as needed
@@ -95,6 +95,13 @@ trait Warehouse {
     /// The "GPS" coordinates of all boxes in the [`Warehouse`]
     fn sum_gps(&self) -> usize {
         self.boxes().iter().map(|&(r, c)| 100 * r + c).sum()
+    }
+
+    /// Return a copy of this [`Warehouse`] after the robot has followed the list of moves
+    fn apply_moves(&self, moves: &Vec<Move>) -> Self {
+        moves
+            .iter()
+            .fold(self.clone(), |warehouse, mv| warehouse.move_robot(mv))
     }
 
     /// Common logic for parsing a [`Warehouse`], used by [`SingleWarehouse::from_str`], and
@@ -131,20 +138,6 @@ trait Warehouse {
             max_r = max_r.max(r);
         }
         (walls, boxes, robot, max_r, max_c)
-    }
-}
-
-/// Helper to enable providing a common implementation of applying moves to `Warehouse` + `Clone`
-trait WarehouseExtensions {
-    fn apply_moves(&self, moves: &Vec<Move>) -> Self;
-}
-
-impl<T: Warehouse + Clone> WarehouseExtensions for T {
-    /// Return a copy of this [`Warehouse`] after the robot has followed the list of moves
-    fn apply_moves(&self, moves: &Vec<Move>) -> Self {
-        moves
-            .iter()
-            .fold(self.clone(), |warehouse, mv| warehouse.move_robot(mv))
     }
 }
 

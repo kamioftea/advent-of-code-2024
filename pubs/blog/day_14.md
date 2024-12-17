@@ -273,8 +273,8 @@ fn can_calculate_total_safety_factor() {
 
 I have to admit that I didn't have a clue where to start with part 2, and I went to the
 [advent of code subreddit](https://www.reddit.com/r/adventofcode/) to get some hints as to what the final picture
-might look like. I tried to skim just to see the image, but also noticed some memes about clustering which led me to
-think about possibly just trying all frames and finding the most clustered.
+might look like. I tried to skim to see an image and avoid too many spoilers, but also noticed some memes about
+clustering which led me to think about finding the most clustered frame.
 
 Firstly I'll check that the robots loop in a reasonable amount of time. To do this I also need `simulate_robots` to
 return robots, not the positions.
