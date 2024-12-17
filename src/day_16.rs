@@ -1,12 +1,20 @@
 //! This is my solution for [Advent of Code - Day 16: _Reindeer Maze_](https://adventofcode.com/2024/day/16)
 //!
+//! [`parse_input`] turns the puzzle input into a [`Maze`]
 //!
+//! [`Maze::lowest_scoring_route`] solves part 1 using `A*` graph search, with [`Position`] tracking the progress
+//! through the maze, with [`Position::next`] providing next steps from each position, using
+//! [`CoordinateExtensions::manhattan_distance`] and [`CoordinateExtensions::turn_cost`] as the heuristic to estimate
+//! remaining distance from a node.
+//!
+//! [`Maze::count_visited_by_best_routes`] solves part 2, using similar techniques, but running until all possible
+//! best routes are found, and analysing [`Position`].`visited` lists to produce the answer.
 
 use crate::day_16::Facing::*;
 use itertools::Itertools;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::{fs, usize};
+use std::{fs, u32};
 
 /// The entry point for running the solutions with the 'real' puzzle input.
 ///
@@ -27,22 +35,25 @@ pub fn run() {
     )
 }
 
-type Coordinates = (usize, usize);
+type Coordinates = (u8, u8);
 
+/// Helper trait to add methods to the built-in `(u8, u8)` Coordinate type
 trait CoordinateExtensions {
-    fn manhattan_distance(&self, other: &Self) -> usize;
-    fn turn_cost(&self, other: &Self, facing: &Facing) -> usize;
+    fn manhattan_distance(&self, other: &Self) -> u32;
+    fn turn_cost(&self, other: &Self, facing: &Facing) -> u32;
 }
 
 impl CoordinateExtensions for Coordinates {
-    fn manhattan_distance(&self, other: &Self) -> usize {
+    /// https://en.wikipedia.org/wiki/Taxicab_geometry
+    fn manhattan_distance(&self, other: &Self) -> u32 {
         let (r0, c0) = self;
         let (r1, c1) = other;
 
-        r0.abs_diff(*r1) + c0.abs_diff(*c1)
+        (r0.abs_diff(*r1) + c0.abs_diff(*c1)) as u32
     }
 
-    fn turn_cost(&self, other: &Self, facing: &Facing) -> usize {
+    /// What is the cost for the minimum number of turns required to meet the goal if no hedges block the shortest path
+    fn turn_cost(&self, other: &Self, facing: &Facing) -> u32 {
         let (r0, c0) = self;
         let (r1, c1) = other;
 
@@ -93,11 +104,12 @@ struct Maze {
     hedges: HashSet<Coordinates>,
     start: Coordinates,
     end: Coordinates,
-    bounds: (usize, usize),
+    bounds: (u8, u8),
 }
 
 impl Maze {
-    fn lowest_scoring_route(&self) -> usize {
+    /// Solves part 1 using A* graph search
+    fn lowest_scoring_route(&self) -> u32 {
         let mut heap: BinaryHeap<Position> = BinaryHeap::new();
         let mut visited = HashSet::new();
         heap.push(self.starting_position());
@@ -116,11 +128,13 @@ impl Maze {
 
         unreachable!("Failed to find route to end");
     }
+
+    /// Solves part 2 using A* graph search that continues until all best routes are found
     //noinspection RsDeprecation
-    fn count_visited_by_best_routes(&self) -> usize {
+    fn count_visited_by_best_routes(&self) -> u32 {
         let mut heap: BinaryHeap<Position> = BinaryHeap::new();
-        let mut visited: HashMap<(Coordinates, Facing), usize> = HashMap::new();
-        let mut lowest_score = usize::MAX;
+        let mut visited: HashMap<(Coordinates, Facing), u32> = HashMap::new();
+        let mut lowest_score = u32::MAX;
         let mut routes = Vec::new();
 
         heap.push(self.starting_position());
@@ -149,9 +163,10 @@ impl Maze {
             }
         }
 
-        routes.iter().flatten().unique().count()
+        routes.iter().flatten().unique().count() as u32
     }
 
+    /// Turn the coordinates for the start point of the maze into the seed Position for searching the maze
     fn starting_position(&self) -> Position {
         Position::new(
             self.start.clone(),
@@ -163,6 +178,7 @@ impl Maze {
     }
 }
 
+/// To track the reindeer's current facing in the maze
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 enum Facing {
     North,
@@ -190,6 +206,7 @@ impl Facing {
         }
     }
 
+    /// The position after taking a step forwards if it is an open tile within the maze, otherwise `None`.
     fn forwards(&self, (r, c): &Coordinates, maze: &Maze) -> Option<Coordinates> {
         let (dr, dc) = match self {
             North => (-1, 0),
@@ -207,57 +224,23 @@ impl Facing {
     }
 }
 
+/// A node in the graph search storing the position and facing, the score and estimated distance to the goal to allow
+/// ordering, and a record of the path taken to reach this node.
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct Position {
     coordinates: Coordinates,
     facing: Facing,
-    score: usize,
-    distance: usize,
+    score: u32,
+    distance: u32,
     visited: Vec<Coordinates>,
 }
 
 impl Position {
-    fn next(&self, maze: &Maze) -> Vec<Position> {
-        vec![
-            Some(Position {
-                facing: self.facing.rotate_clockwise(),
-                score: self.score + 1000,
-                distance: self.coordinates.manhattan_distance(&maze.end)
-                    + self
-                        .coordinates
-                        .turn_cost(&maze.end, &self.facing.rotate_clockwise()),
-                ..self.clone()
-            }),
-            Some(Position {
-                facing: self.facing.rotate_counterclockwise(),
-                score: self.score + 1000,
-                distance: self.coordinates.manhattan_distance(&maze.end)
-                    + self
-                        .coordinates
-                        .turn_cost(&maze.end, &self.facing.rotate_counterclockwise()),
-                ..self.clone()
-            }),
-            self.facing
-                .forwards(&self.coordinates, maze)
-                .map(|coordinates| Position {
-                    coordinates,
-                    score: self.score + 1,
-                    distance: coordinates.manhattan_distance(&maze.end)
-                        + coordinates.turn_cost(&maze.end, &self.facing),
-                    facing: self.facing,
-                    visited: [self.visited.clone(), vec![coordinates]].concat(),
-                }),
-        ]
-        .into_iter()
-        .flatten()
-        .collect()
-    }
-
     pub fn new(
         coordinates: Coordinates,
         facing: Facing,
-        score: usize,
-        distance: usize,
+        score: u32,
+        distance: u32,
         visited: Vec<Coordinates>,
     ) -> Self {
         Self {
@@ -267,6 +250,46 @@ impl Position {
             distance,
             visited,
         }
+    }
+
+    /// The updated facing, cost and remaining distance guess after turning to a new facing
+    fn turn_to(&self, facing: Facing, maze: &Maze) -> Self {
+        Position {
+            facing,
+            score: self.score + 1000,
+            distance: self.coordinates.manhattan_distance(&maze.end)
+                + self.coordinates.turn_cost(&maze.end, &facing),
+            ..self.clone()
+        }
+    }
+
+    /// The updated coordinates, cost, remaining distance guess, and path travelled afters stepping forward. `None`
+    /// if blocked. facing
+    fn step(&self, maze: &Maze) -> Option<Self> {
+        if let Some(coordinates) = self.facing.forwards(&self.coordinates, maze) {
+            Some(Position {
+                coordinates,
+                score: self.score + 1,
+                distance: coordinates.manhattan_distance(&maze.end)
+                    + coordinates.turn_cost(&maze.end, &self.facing),
+                facing: self.facing,
+                visited: [self.visited.clone(), vec![coordinates]].concat(),
+            })
+        } else {
+            None
+        }
+    }
+
+    /// From a given position, provide the Position after all possible next moves.
+    fn next(&self, maze: &Maze) -> Vec<Position> {
+        vec![
+            Some(self.turn_to(self.facing.rotate_clockwise(), maze)),
+            Some(self.turn_to(self.facing.rotate_counterclockwise(), maze)),
+            self.step(maze),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 }
 
@@ -282,6 +305,7 @@ impl PartialOrd for Position {
     }
 }
 
+/// Turn the puzzle input into the internal representation.
 fn parse_input(input: &String) -> Maze {
     let mut hedges = HashSet::new();
     let mut start = (0, 0);
@@ -293,15 +317,15 @@ fn parse_input(input: &String) -> Maze {
         for (c, char) in row.chars().enumerate() {
             match char {
                 '#' => {
-                    hedges.insert((r, c));
+                    hedges.insert((r as u8, c as u8));
                 }
-                'S' => start = (r, c),
-                'E' => end = (r, c),
+                'S' => start = (r as u8, c as u8),
+                'E' => end = (r as u8, c as u8),
                 _ => {}
             }
-            max_c = max_c.max(c);
+            max_c = max_c.max(c as u8);
         }
-        max_r = max_r.max(r);
+        max_r = max_r.max(r as u8);
     }
 
     Maze {
