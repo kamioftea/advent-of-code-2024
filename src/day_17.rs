@@ -1,6 +1,12 @@
 //! This is my solution for [Advent of Code - Day 17: _Chronospatial Computer_](https://adventofcode.com/2024/day/17)
 //!
+//! [`parse_input`] parses the input into a [`Computer`].
 //!
+//! [`Computer::run`] run solves part 1, with helpers [`Computer::next_instruction`], and [`Computer::deref_combo`].
+//! There is also a method for each of the 8 operators.
+//!
+//! [`reverse_engineer_quine`] solves part 2 by building up the number for a from least-significant digit backwards
+//! [`brute_force_quine`] is left as deaf code for posterity
 
 use itertools::Itertools;
 use std::fs;
@@ -24,6 +30,7 @@ pub fn run() {
     );
 }
 
+/// Represents a computer and the program it will run
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct Computer {
     register_a: usize,
@@ -34,6 +41,7 @@ struct Computer {
 }
 
 impl Computer {
+    /// Create a copy of this computer with the A register set to the provided value
     fn with_register_a(&self, value: usize) -> Computer {
         Computer {
             register_a: value,
@@ -41,6 +49,7 @@ impl Computer {
         }
     }
 
+    /// Read the instruction at the `instruction_pointer`, and the next number as the operand
     fn next_instruction(&self) -> Option<(u8, u8)> {
         self.program
             .get(self.instruction_pointer)
@@ -48,12 +57,13 @@ impl Computer {
             .map(|(&inst, &operand)| (inst, operand))
     }
 
+    //noinspection RsLiveness - false negative
     /// Combo operands 0 through 3 represent literal values 0 through 3.
     /// Combo operand 4 represents the value of register A.
     /// Combo operand 5 represents the value of register B.
     /// Combo operand 6 represents the value of register C.
     /// Combo operand 7 is reserved and will not appear in valid programs.
-    fn combo(&self, operand: u8) -> usize {
+    fn deref_combo(&self, operand: u8) -> usize {
         match operand {
             0 | 1 | 2 | 3 => operand as usize,
             4 => self.register_a,
@@ -63,72 +73,68 @@ impl Computer {
         }
     }
 
-    // The adv instruction (opcode 0) performs division. The numerator is the value in the A register. The denominator is
-    // found by raising 2 to the power of the instruction's combo operand. (So, an operand of 2 would divide A by 4 (2^2)
-    // ; an operand of 5 would divide A by 2^B.) The result of the division operation is truncated to an integer and then
-    // written to the A register
+    /// The adv instruction (opcode 0) performs division. The numerator is the value in the A register. The
+    /// denominator is found by raising 2 to the power of the instruction's combo operand. (So, an operand of 2 would
+    /// divide A by 4 (2^2) ; an operand of 5 would divide A by 2^B.) The result of the division operation is
+    /// truncated to an integer and then written to the A register
     fn adv(&mut self, operand: u8) {
-        self.register_a = self.register_a / (2usize.pow(self.combo(operand) as u32));
-        self.instruction_pointer += 2;
+        self.register_a = self.register_a / (2usize.pow(self.deref_combo(operand) as u32));
     }
 
-    // The bxl instruction (opcode 1) calculates the bitwise XOR of register B  and the instruction's literal operand,
-    // then stores the result in register B.
+    /// The bxl instruction (opcode 1) calculates the bitwise XOR of register B  and the instruction's literal operand,
+    /// then stores the result in register B.
     fn bxl(&mut self, operand: u8) {
         self.register_b ^= operand as usize;
-        self.instruction_pointer += 2;
     }
 
-    // The bst instruction (opcode 2) calculates the value of its combo operand modulo 8 (thereby keeping only its lowest
-    // 3 bits), then writes that value to the B register.
+    /// The bst instruction (opcode 2) calculates the value of its combo operand modulo 8 (thereby keeping only its
+    /// lowest 3 bits), then writes that value to the B register.
     fn bst(&mut self, operand: u8) {
-        self.register_b = self.combo(operand) % 8;
-        self.instruction_pointer += 2;
+        self.register_b = self.deref_combo(operand) % 8;
     }
 
-    // The jnz instruction (opcode 3) does nothing if the A register is 0. However, if the A register is not zero, it
-    // jumps by setting the instruction pointer to the value of its literal operand; if this instruction jumps, the
-    // instruction pointer is not increased by 2 after this instruction.
+    /// The jnz instruction (opcode 3) does nothing if the A register is 0. However, if the A register is not zero, it
+    /// jumps by setting the instruction pointer to the value of its literal operand; if this instruction jumps, the
+    /// instruction pointer is not increased by 2 after this instruction.
     fn jnz(&mut self, operand: u8) {
         if self.register_a != 0 {
             self.instruction_pointer = operand as usize;
-        } else {
-            self.instruction_pointer += 2;
         }
     }
 
-    // The bxc instruction (opcode 4) calculates the bitwise XOR of register B and register C, then stores the result in
-    // register B. (For legacy reasons, this instruction reads an operand but ignores it.)
+    /// The bxc instruction (opcode 4) calculates the bitwise XOR of register B and register C, then stores the
+    /// result in register B. (For legacy reasons, this instruction reads an operand but ignores it.)
     fn bxc(&mut self, _: u8) {
         self.register_b ^= self.register_c;
-        self.instruction_pointer += 2;
     }
 
-    // The out instruction (opcode 5) calculates the value of its combo operand modulo 8, then outputs that value. (If a
-    // program outputs multiple values, they are separated by commas.)
+    /// The out instruction (opcode 5) calculates the value of its combo operand modulo 8, then outputs that value.
+    /// (If a program outputs multiple values, they are separated by commas.)
     fn out(&mut self, operand: u8) -> u8 {
-        self.instruction_pointer += 2;
-        (self.combo(operand) % 8) as u8
+        (self.deref_combo(operand) % 8) as u8
     }
 
-    // The bdv instruction (opcode 6) works exactly like the adv instruction except that the result is stored in the B
-    // register. (The numerator is still read from the A register.)
+    /// The bdv instruction (opcode 6) works exactly like the adv instruction except that the result is stored in the B
+    /// register. (The numerator is still read from the A register.)
     fn bdv(&mut self, operand: u8) {
-        self.register_b = self.register_a / (2usize.pow(self.combo(operand) as u32));
-        self.instruction_pointer += 2;
+        self.register_b = self.register_a / (2usize.pow(self.deref_combo(operand) as u32));
     }
 
-    // The cdv instruction (opcode 6) works exactly like the adv instruction except that the result is stored in the C
-    // register. (The numerator is still read from the A register.)
+    /// The cdv instruction (opcode 6) works exactly like the adv instruction except that the result is stored in the C
+    /// register. (The numerator is still read from the A register.)
     fn cdv(&mut self, operand: u8) {
-        self.register_c = self.register_a / (2usize.pow(self.combo(operand) as u32));
-        self.instruction_pointer += 2;
+        self.register_c = self.register_a / (2usize.pow(self.deref_combo(operand) as u32));
     }
 
+    //noinspection RsLiveness - false negative
+    /// Run the provided program unt the instruction pointer increments beyond the end of the program. Outputting any
+    /// digits that result from [`Computer::out`]
     fn run(&mut self) -> Vec<u8> {
         let mut output = Vec::new();
 
         while let Some((instruction, operand)) = self.next_instruction() {
+            self.instruction_pointer += 2;
+
             match instruction {
                 0 => self.adv(operand),
                 1 => self.bxl(operand),
@@ -146,11 +152,13 @@ impl Computer {
     }
 }
 
+/// Parse e.g. `Register A: 2024` into `2024usize`
 fn parse_register(line: &str) -> usize {
     let (_, num) = line.split_once(": ").unwrap();
     num.parse().unwrap()
 }
 
+/// Parse e.g. `Program: 2,0,2,4` into `vec![2,0,2,4]`
 fn parse_program(line: &str) -> Vec<u8> {
     let (_, program) = line.split_once(": ").unwrap();
     program
@@ -160,6 +168,7 @@ fn parse_program(line: &str) -> Vec<u8> {
         .collect()
 }
 
+/// Parse the puzzle input, three registers, a blank line and a program represented by a list of 3-bit digits
 fn parse_input(input: &String) -> Computer {
     let (registers, program) = input.split_once("\n\n").unwrap();
     let mut register_iter = registers.lines();
@@ -173,6 +182,7 @@ fn parse_input(input: &String) -> Computer {
     }
 }
 
+/// Look for a quine by trying all values of A from 0
 #[allow(dead_code)]
 fn brute_force_quine(computer: &Computer) -> usize {
     (0..)
@@ -182,6 +192,8 @@ fn brute_force_quine(computer: &Computer) -> usize {
         .0
 }
 
+/// Working from least-significant bit backwards build a bit at a time. This relies on the program having a loop
+/// where a 3-bit digit is right-shifted off the A register and corresponding single digit is outputted by the program.
 fn reverse_engineer_quine(computer: &Computer) -> usize {
     let mut partial_quines = vec![0];
     for &next_digit_to_match in computer.program.iter().rev() {
