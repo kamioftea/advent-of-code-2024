@@ -239,7 +239,7 @@ Whilst that is running, I have a look at my actual input and work out what it is
 
 ```text
 2,4  bst,A,  B = A & 7        Read next digit into B
-1,5  bxl,B,  B = B xor 5   
+1,5  bxl,5  B = B xor 5   
 7,5  cdv,B,  C = A / 2^B      C depends on A and B
 0,3  adv,3,  A = A / 2^3      Shift current digit out of A
 4,1  bxc,_,  B = B xor C      B depends on C
