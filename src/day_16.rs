@@ -44,7 +44,7 @@ trait CoordinateExtensions {
 }
 
 impl CoordinateExtensions for Coordinates {
-    /// https://en.wikipedia.org/wiki/Taxicab_geometry
+    /// [Manhattan distance](https://en.wikipedia.org/wiki/Taxicab_geometry) between two points
     fn manhattan_distance(&self, other: &Self) -> u32 {
         let (r0, c0) = self;
         let (r1, c1) = other;
@@ -52,7 +52,8 @@ impl CoordinateExtensions for Coordinates {
         (r0.abs_diff(*r1) + c0.abs_diff(*c1)) as u32
     }
 
-    /// What is the cost for the minimum number of turns required to meet the goal if no hedges block the shortest path
+    /// What is the cost for the minimum number of turns required to meet the goal if no hedges block the shortest
+    /// path, given the position, goal and current facing.
     fn turn_cost(&self, other: &Self, facing: &Facing) -> u32 {
         let (r0, c0) = self;
         let (r1, c1) = other;
@@ -340,7 +341,7 @@ fn parse_input(input: &String) -> Maze {
 mod tests {
     use crate::day_16::*;
     use crate::helpers::test::assert_contains_in_any_order;
-    
+
     fn example_maze() -> Maze {
         #[rustfmt::skip]
         let hedges = vec![
