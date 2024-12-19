@@ -3,6 +3,7 @@
 //!
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::rc::Rc;
 use Colour::*;
@@ -18,7 +19,12 @@ pub fn run() {
     println!(
         "{} of the designs can be made",
         count_matches(&pattern_tree, &designs)
-    )
+    );
+
+    println!(
+        "{} combinations of the designs can be made",
+        sum_combinations(&pattern_tree, &designs)
+    );
 }
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
@@ -172,6 +178,52 @@ fn count_matches(root: &TreeNode, designs: &Vec<Vec<Colour>>) -> usize {
         .count()
 }
 
+fn combinations_impl(
+    node_ref: TreeNodeRef,
+    design: &Vec<Colour>,
+    start: usize,
+    root: &TreeNodeRef,
+    cache: &mut HashMap<usize, usize>,
+) -> usize {
+    let node = node_ref.borrow();
+    let mut count = 0;
+
+    if node.is_match {
+        if let Some(sub_count) = cache.get(&start) {
+            count += sub_count;
+        } else {
+            let sub_count = combinations_impl(root.clone(), design, start, root, cache);
+            cache.insert(start, sub_count);
+
+            count += sub_count;
+        }
+    } else if start >= design.len() {
+        return if node.is_root { 1 } else { 0 };
+    }
+
+    count += design
+        .get(start)
+        .and_then(|colour| node.get_node(colour))
+        .map(|next_node_ref| combinations_impl(next_node_ref, design, start + 1, root, cache))
+        .unwrap_or(0);
+
+    count
+}
+
+fn combinations(root: &TreeNode, design: &Vec<Colour>) -> usize {
+    let root_ref = root.clone().into_ref();
+    let mut cache = HashMap::new();
+
+    combinations_impl(root_ref.clone(), design, 0, &root_ref, &mut cache)
+}
+
+fn sum_combinations(root: &TreeNode, designs: &Vec<Vec<Colour>>) -> usize {
+    designs
+        .iter()
+        .map(|design| combinations(root, design))
+        .sum()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::day_19::*;
@@ -256,6 +308,7 @@ bbrgwb
         assert_eq!(designs, example_designs());
     }
 
+    //noinspection SpellCheckingInspection
     #[test]
     fn can_match_pattern() {
         let root = example_pattern_tree();
@@ -291,6 +344,44 @@ bbrgwb
         assert_eq!(
             count_matches(&example_pattern_tree(), &example_designs()),
             6
+        )
+    }
+
+    #[test]
+    fn can_count_combinations() {
+        let root = example_pattern_tree();
+        // brwrr can be made with a br towel, then a wr towel, and then finally an r towel.
+        assert_eq!(combinations(&root, &vec![Black, Red, White, Red, Red]), 2);
+        // bggr can be made with a b towel, two g towels, and then an r towel.
+        assert_eq!(combinations(&root, &vec![Black, Green, Green, Red]), 1);
+        // gbbr can be made with a gb towel and then a br towel.
+        assert_eq!(combinations(&root, &vec![Green, Black, Black, Red]), 4);
+        // rrbgbr can be made with r, rb, g, and br.
+        assert_eq!(
+            combinations(&root, &vec![Red, Red, Black, Green, Black, Red]),
+            6
+        );
+        // ubwu is impossible.
+        assert_eq!(combinations(&root, &vec![Blue, Black, White, Blue]), 0);
+        // bwurrg can be made with bwu, r, r, and g.
+        assert_eq!(
+            combinations(&root, &vec![Black, White, Blue, Red, Red, Green]),
+            1
+        );
+        // brgr can be made with br, g, and r.
+        assert_eq!(combinations(&root, &vec![Black, Red, Green, Red]), 2);
+        // bbrgwb is impossible.
+        assert_eq!(
+            combinations(&root, &vec![Black, Black, Red, Green, White, Black]),
+            0
+        );
+    }
+
+    #[test]
+    fn can_sum_combinations() {
+        assert_eq!(
+            sum_combinations(&example_pattern_tree(), &example_designs()),
+            16
         )
     }
 }
