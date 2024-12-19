@@ -12,10 +12,16 @@ use Colour::*;
 /// - The puzzle input is expected to be at `<project_root>/res/day-19-input`
 /// - It is expected this will be called by [`super::main()`] when the user elects to run day 19.
 pub fn run() {
-    let _contents = fs::read_to_string("res/day-19-input.txt").expect("Failed to read file");
+    let contents = fs::read_to_string("res/day-19-input.txt").expect("Failed to read file");
+    let (pattern_tree, designs) = parse_input(&contents);
+
+    println!(
+        "{} of the designs can be made",
+        count_matches(&pattern_tree, &designs)
+    )
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
 enum Colour {
     White,
     Blue,
@@ -39,9 +45,10 @@ impl From<char> for Colour {
 
 type TreeNodeRef = Rc<RefCell<TreeNode>>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 struct TreeNode {
     is_match: bool,
+    is_root: bool,
     w: Option<TreeNodeRef>,
     u: Option<TreeNodeRef>,
     b: Option<TreeNodeRef>,
@@ -53,6 +60,7 @@ impl TreeNode {
     fn new() -> Self {
         TreeNode {
             is_match: false,
+            is_root: false,
             w: None,
             u: None,
             b: None,
@@ -92,6 +100,16 @@ impl TreeNode {
         }
     }
 
+    fn get_node(&self, colour: &Colour) -> Option<TreeNodeRef> {
+        match colour {
+            White => self.w.clone(),
+            Blue => self.u.clone(),
+            Black => self.b.clone(),
+            Red => self.r.clone(),
+            Green => self.g.clone(),
+        }
+    }
+
     fn into_ref(self) -> TreeNodeRef {
         Rc::new(RefCell::new(self))
     }
@@ -99,6 +117,7 @@ impl TreeNode {
 
 fn parse_patterns(input: &str) -> TreeNode {
     let mut root = TreeNode::new();
+    root.is_root = true;
 
     input
         .split(", ")
@@ -120,12 +139,46 @@ fn parse_input(input: &String) -> (TreeNode, Vec<Vec<Colour>>) {
     (parse_patterns(patterns), parse_designs(designs))
 }
 
+fn matches_impl(
+    node_ref: TreeNodeRef,
+    design: &Vec<Colour>,
+    start: usize,
+    root: &TreeNodeRef,
+) -> bool {
+    let node = node_ref.borrow();
+
+    if node.is_match && matches_impl(root.clone(), design, start, root) {
+        return true;
+    }
+
+    if start >= design.len() {
+        return node.is_root;
+    }
+
+    node.get_node(&design[start])
+        .is_some_and(|next_node_ref| matches_impl(next_node_ref, design, start + 1, root))
+}
+
+fn matches(root: &TreeNode, design: &Vec<Colour>) -> bool {
+    let root_ref = root.clone().into_ref();
+
+    matches_impl(root_ref.clone(), design, 0, &root_ref)
+}
+
+fn count_matches(root: &TreeNode, designs: &Vec<Vec<Colour>>) -> usize {
+    designs
+        .iter()
+        .filter(|&design| matches(root, design))
+        .count()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::day_19::*;
 
     fn example_pattern_tree() -> TreeNode {
         let mut root = TreeNode::new();
+        root.is_root = true;
 
         let mut w = TreeNode::new();
         let mut b = TreeNode::new();
@@ -194,11 +247,50 @@ rrbgbr
 ubwu
 bwurrg
 brgr
-bbrgwb"
-            .to_string();
+bbrgwb
+"
+        .to_string();
 
         let (patterns, designs) = parse_input(&input);
         assert_eq!(patterns, example_pattern_tree());
         assert_eq!(designs, example_designs());
+    }
+
+    #[test]
+    fn can_match_pattern() {
+        let root = example_pattern_tree();
+        // brwrr can be made with a br towel, then a wr towel, and then finally an r towel.
+        assert_eq!(matches(&root, &vec![Black, Red, White, Red, Red]), true);
+        // bggr can be made with a b towel, two g towels, and then an r towel.
+        assert_eq!(matches(&root, &vec![Black, Green, Green, Red]), true);
+        // gbbr can be made with a gb towel and then a br towel.
+        assert_eq!(matches(&root, &vec![Green, Black, Black, Red]), true);
+        // rrbgbr can be made with r, rb, g, and br.
+        assert_eq!(
+            matches(&root, &vec![Red, Red, Black, Green, Black, Red]),
+            true
+        );
+        // ubwu is impossible.
+        assert_eq!(matches(&root, &vec![Blue, Black, White, Blue]), false);
+        // bwurrg can be made with bwu, r, r, and g.
+        assert_eq!(
+            matches(&root, &vec![Black, White, Blue, Red, Red, Green]),
+            true
+        );
+        // brgr can be made with br, g, and r.
+        assert_eq!(matches(&root, &vec![Black, Red, Green, Red]), true);
+        // bbrgwb is impossible.
+        assert_eq!(
+            matches(&root, &vec![Black, Black, Red, Green, White, Black]),
+            false
+        );
+    }
+
+    #[test]
+    fn can_count_matches() {
+        assert_eq!(
+            count_matches(&example_pattern_tree(), &example_designs()),
+            6
+        )
     }
 }
