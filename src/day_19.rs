@@ -65,27 +65,27 @@ impl TreeNode {
         match colours.next() {
             Some(White) => self
                 .w
-                .get_or_insert_with(|| Rc::new(RefCell::new(TreeNode::new())))
+                .get_or_insert_with(|| TreeNode::new().into_ref())
                 .borrow_mut()
                 .insert(colours),
             Some(Blue) => self
                 .u
-                .get_or_insert_with(|| Rc::new(RefCell::new(TreeNode::new())))
+                .get_or_insert_with(|| TreeNode::new().into_ref())
                 .borrow_mut()
                 .insert(colours),
             Some(Black) => self
                 .b
-                .get_or_insert_with(|| Rc::new(RefCell::new(TreeNode::new())))
+                .get_or_insert_with(|| TreeNode::new().into_ref())
                 .borrow_mut()
                 .insert(colours),
             Some(Red) => self
                 .r
-                .get_or_insert_with(|| Rc::new(RefCell::new(TreeNode::new())))
+                .get_or_insert_with(|| TreeNode::new().into_ref())
                 .borrow_mut()
                 .insert(colours),
             Some(Green) => self
                 .g
-                .get_or_insert_with(|| Rc::new(RefCell::new(TreeNode::new())))
+                .get_or_insert_with(|| TreeNode::new().into_ref())
                 .borrow_mut()
                 .insert(colours),
             None => self.is_match = true,
