@@ -1,6 +1,12 @@
 //! This is my solution for [Advent of Code - Day 18: _RAM Run_](https://adventofcode.com/2024/day/18)
 //!
+//! [`parse_input`] uses [`parse_coordinate`] to turn the puzzle input into a [`MemorySpace`]
 //!
+//! Part 1 is solved by [`MemorySpace::steps_to_goal`], using [`Position`] to store intermediate stages in a struct
+//! that implements `Ord`. [`CoordinateExtensions::manhattan_distance`], [`CoordinateExtensions::step`] and
+//! [`Position::next`] provide the ways to build up the list of next [`Position`]s to try until the goal is found.
+//!
+//! Part 2 is implemented by [`MemorySpace::route_blocked_at`] which mostly re-uses part 1.
 
 use itertools::Itertools;
 use std::cmp::Ordering;
@@ -25,6 +31,7 @@ pub fn run() {
     println!("The first blocker is {x},{y}",);
 }
 
+/// A Coordinate in Memory Space
 type Coordinates = (u8, u8);
 
 trait CoordinateExtensions: Sized {
@@ -33,6 +40,8 @@ trait CoordinateExtensions: Sized {
 }
 
 impl CoordinateExtensions for Coordinates {
+    /// The distance between two points in memory space using
+    /// [manhattan distance](https://en.wikipedia.org/wiki/Taxicab_geometry)
     fn manhattan_distance(&self, other: &Self) -> u32 {
         let (r0, c0) = self;
         let (r1, c1) = other;
@@ -40,12 +49,14 @@ impl CoordinateExtensions for Coordinates {
         (r0.abs_diff(*r1) + c0.abs_diff(*c1)) as u32
     }
 
-    fn step(&self, delta: (i8, i8), (r_max, c_max): &(u8, u8)) -> Option<Self> {
+    /// The position after applying a given delta, None if not with in the grid. Note that the max for Memory space
+    /// is inclusive, because it's defined as the position of the goal
+    fn step(&self, delta: (i8, i8), (r_goal, c_goal): &(u8, u8)) -> Option<Self> {
         let (r, c) = self;
         let (dr, dc) = delta;
 
-        let r1 = r.checked_add_signed(dr).filter(|r| r <= r_max);
-        let c1 = c.checked_add_signed(dc).filter(|c| c <= c_max);
+        let r1 = r.checked_add_signed(dr).filter(|r| r <= r_goal);
+        let c1 = c.checked_add_signed(dc).filter(|c| c <= c_goal);
 
         r1.zip(c1)
     }
@@ -58,6 +69,8 @@ struct MemorySpace {
 }
 
 impl MemorySpace {
+    /// Solves part 1, A* search for a path to the goal when only the first `bytes` entries from `self.corrupted` have
+    /// been applied .
     fn steps_to_goal(&self, bytes: usize) -> Option<Position> {
         let mut heap: BinaryHeap<Position> = BinaryHeap::new();
         let mut visited = HashMap::new();
@@ -87,11 +100,14 @@ impl MemorySpace {
         None
     }
 
+    /// Utility for seeding the BinaryTree with the starting [`Position`]
     fn starting_position(&self) -> Position {
         let start = (0, 0);
         Position::new(start, 0, start.manhattan_distance(&self.goal), vec![start])
     }
 
+    /// Solves part 2, find the first block that blocks the previous best path, then find a better path, and so on
+    /// until a path is not found
     fn route_blocked_at(&self, position: &Position, bytes: usize) -> Coordinates {
         let route: HashSet<Coordinates> = position.visited.iter().cloned().collect();
 
@@ -290,10 +306,14 @@ mod tests {
 
     #[test]
     fn can_find_steps_to_goal() {
+        let position = example_space().steps_to_goal(12).unwrap();
+        assert_eq!(position.travelled, 22);
+    }
+
+    #[test]
+    fn can_find_when_path_is_blocked() {
         let space = example_space();
         let position = space.steps_to_goal(12).unwrap();
-        assert_eq!(position.travelled, 22);
-
         assert_eq!(space.route_blocked_at(&position, 0), (1, 6));
     }
 }
