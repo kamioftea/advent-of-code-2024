@@ -14,6 +14,7 @@ mod day_15;
 mod day_16;
 mod day_17;
 mod day_18;
+mod day_19;
 mod day_2;
 mod day_3;
 mod day_4;
@@ -52,6 +53,7 @@ fn main() {
         Box::new(|| day_16::run()),
         Box::new(|| day_17::run()),
         Box::new(|| day_18::run()),
+        Box::new(|| day_19::run()),
     ];
 
     let start = Instant::now();
