@@ -1,6 +1,6 @@
 //! This is my solution for [Advent of Code - Day 19: _Linen Layout_](https://adventofcode.com/2024/day/19)
 //!
-//! [`parse_input`] uses [`parse_patterns`] to turn the patterns into a tree of [`PatternTreeNodes`] by repeatedly
+//! [`parse_input`] uses [`parse_patterns`] to turn the patterns into a tree of [`PatternTreeNode`]s by repeatedly
 //! using [`PatternTreeNode::insert`], and the designs as a list of lists of [`Colour`].
 //!
 //! [`PatternTreeNode::count_matches`] solves part one, calling [`PatternTreeNode::matches`] for each design.
