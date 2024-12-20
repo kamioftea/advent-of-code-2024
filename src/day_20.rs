@@ -1,9 +1,13 @@
 //! This is my solution for [Advent of Code - Day 20: _Race Condition_](https://adventofcode.com/2024/day/20)
 //!
+//! [`parse_input`] turns the input file into a [`RaceTrack`]
 //!
+//! [`RaceTrack::cheats`]solves both parts. It uses [`RaceTrack::get_track_positions`] to turn the grid data into an
+//! indexed list of the spaces visited, then calculates those that match the part's criteria and counts them. There
+//! are some coordinate utilities in [`CoordinateExtensions`].
 
 use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -16,12 +20,12 @@ pub fn run() {
 
     println!(
         "There are {} cheats of length 2 that save at least 100 picoseconds",
-        track.count_cheats_from(100, 2)
+        track.cheats(100, 2)
     );
 
     println!(
         "There are {} cheats of length up to 20 that save at least 100 picoseconds",
-        track.count_cheats_from(100, 20)
+        track.cheats(100, 20)
     );
 }
 
@@ -33,6 +37,7 @@ trait CoordinateExtensions: Sized {
 }
 
 impl CoordinateExtensions for Coordinates {
+    /// The new coordinates after applying the given delta, None if either coordinate would end up negative
     fn apply(&self, delta: &(isize, isize)) -> Option<Self> {
         let (r, c) = self;
         let (dr, dc) = delta;
@@ -60,6 +65,7 @@ struct RaceTrack {
 }
 
 impl RaceTrack {
+    /// Turn the set of track coordinates into an indexed list in the order they are visited
     fn get_track_positions(&self) -> Vec<(usize, Coordinates)> {
         let mut visited = Vec::new();
         let mut position = self.start;
@@ -86,8 +92,8 @@ impl RaceTrack {
 
         visited
     }
-
-    fn cheats(&self, max_cheat: usize) -> HashMap<(Coordinates, Coordinates), usize> {
+    /// Find the possible cheats that save at least `saving_threshold` picoseconds, and are at most `cheat_length`
+    fn cheats(&self, saving_threshold: usize, cheat_length: usize) -> usize {
         let track = self.get_track_positions();
 
         track
@@ -95,26 +101,20 @@ impl RaceTrack {
             .tuple_combinations()
             .flat_map(|(&(start_idx, start_coord), &(end_idx, end_coord))| {
                 let manhattan_distance = start_coord.manhattan_distance(&end_coord);
-                if manhattan_distance > max_cheat {
+                if manhattan_distance > cheat_length {
                     None
                 } else {
-                    Some((start_coord, end_coord))
-                        .zip((end_idx - start_idx).checked_sub(manhattan_distance))
-                        .filter(|&(_, distance)| distance > 0)
+                    (end_idx - start_idx)
+                        .checked_sub(manhattan_distance)
+                        .filter(|&distance| distance >= saving_threshold)
                 }
             })
-            .collect()
-    }
-
-    fn count_cheats_from(&self, threshold: usize, max_cheat: usize) -> usize {
-        self.cheats(max_cheat)
-            .iter()
-            .map(|(_, saving)| saving)
-            .filter(|&&saving| saving >= threshold)
             .count()
     }
 }
 
+/// Turn the input file into the set of free spaces that make up the race's course (including start and end) as well
+/// as storing the positions of the start and end spaces.
 fn parse_input(input: &String) -> RaceTrack {
     let mut course = HashSet::new();
     let mut start = (0, 0);
@@ -195,26 +195,14 @@ mod tests {
     }
 
     #[test]
-    fn can_list_cheats() {
-        let cheats = example_track().cheats(2);
-
-        assert_eq!(cheats.get(&((1, 7), (1, 9))), Some(&12));
-        assert_eq!(cheats.get(&((7, 9), (7, 11))), Some(&20));
-        assert_eq!(cheats.get(&((7, 8), (9, 8))), Some(&38));
-        assert_eq!(cheats.get(&((7, 7), (7, 5))), Some(&64));
-
-        assert_eq!(cheats.len(), 44);
-    }
-
-    #[test]
     fn can_count_significant_cheats() {
         let track = example_track();
 
-        assert_eq!(track.count_cheats_from(4, 2), 30);
-        assert_eq!(track.count_cheats_from(15, 2), 5);
+        assert_eq!(track.cheats(4, 2), 30);
+        assert_eq!(track.cheats(15, 2), 5);
 
-        assert_eq!(track.count_cheats_from(50, 20), 285);
-        assert_eq!(track.count_cheats_from(72, 20), 29);
+        assert_eq!(track.cheats(50, 20), 285);
+        assert_eq!(track.cheats(72, 20), 29);
     }
 
     #[test]
