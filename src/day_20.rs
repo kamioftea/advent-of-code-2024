@@ -2,6 +2,7 @@
 //!
 //!
 
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 
@@ -14,8 +15,13 @@ pub fn run() {
     let track = parse_input(&contents);
 
     println!(
-        "There are {} cheats of at least 100 picoseconds",
-        track.count_cheats_from(100)
+        "There are {} cheats of length 2 that save at least 100 picoseconds",
+        track.count_cheats_from(100, 2)
+    );
+
+    println!(
+        "There are {} cheats of length up to 20 that save at least 100 picoseconds",
+        track.count_cheats_from(100, 20)
     );
 }
 
@@ -23,6 +29,7 @@ type Coordinates = (usize, usize);
 
 trait CoordinateExtensions: Sized {
     fn apply(&self, delta: &(isize, isize)) -> Option<Self>;
+    fn manhattan_distance(&self, other: &Self) -> usize;
 }
 
 impl CoordinateExtensions for Coordinates {
@@ -35,6 +42,14 @@ impl CoordinateExtensions for Coordinates {
 
         r1.zip(c1)
     }
+
+    /// [Manhattan distance](https://en.wikipedia.org/wiki/Taxicab_geometry) between two points
+    fn manhattan_distance(&self, other: &Self) -> usize {
+        let (r0, c0) = self;
+        let (r1, c1) = other;
+
+        r0.abs_diff(*r1) + c0.abs_diff(*c1)
+    }
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -45,50 +60,54 @@ struct RaceTrack {
 }
 
 impl RaceTrack {
-    fn cheats(&self) -> HashMap<(Coordinates, Coordinates), usize> {
-        let mut visited = HashMap::new();
-        let mut cheats = HashMap::new();
+    fn get_track_positions(&self) -> Vec<(usize, Coordinates)> {
+        let mut visited = Vec::new();
         let mut position = self.start;
+        let mut prev = self.start;
 
         for index in 0.. {
-            visited.insert(position, index);
-            let mut next = position;
-            for delta in [(-1, 0), (0, 1), (1, 0), (0, -1)] {
-                let maybe_adjacent = position.apply(&delta);
-                let maybe_next = maybe_adjacent.filter(|coords| self.course.contains(coords));
-
-                if maybe_adjacent.is_some() && maybe_next.is_none() {
-                    let adjacent = maybe_adjacent.unwrap();
-                    let maybe_cheat = adjacent
-                        .apply(&delta)
-                        .and_then(|coords| Some(coords).zip(visited.get(&coords)));
-                    if let Some((start_pos, &start_index)) = maybe_cheat {
-                        cheats.insert((start_pos, position), index - start_index - 2);
-                    }
-                }
-
-                let without_visited = maybe_next.filter(|coords| !visited.contains_key(coords));
-                if without_visited.is_some() {
-                    next = without_visited.unwrap();
-                }
-            }
-
+            visited.push((index, position));
             if position == self.end {
                 break;
             }
 
-            if next == position {
-                unreachable!("{position:?} failed to find next position")
+            for delta in [(-1, 0), (0, 1), (1, 0), (0, -1)] {
+                if let Some(next) = position
+                    .apply(&delta)
+                    .filter(|coords| self.course.contains(coords))
+                    .filter(|coords| coords != &prev)
+                {
+                    prev = position;
+                    position = next;
+                    break;
+                }
             }
-
-            position = next;
         }
 
-        cheats
+        visited
     }
 
-    fn count_cheats_from(&self, threshold: usize) -> usize {
-        self.cheats()
+    fn cheats(&self, max_cheat: usize) -> HashMap<(Coordinates, Coordinates), usize> {
+        let track = self.get_track_positions();
+
+        track
+            .iter()
+            .tuple_combinations()
+            .flat_map(|(&(start_idx, start_coord), &(end_idx, end_coord))| {
+                let manhattan_distance = start_coord.manhattan_distance(&end_coord);
+                if manhattan_distance > max_cheat {
+                    None
+                } else {
+                    Some((start_coord, end_coord))
+                        .zip((end_idx - start_idx).checked_sub(manhattan_distance))
+                        .filter(|&(_, distance)| distance > 0)
+                }
+            })
+            .collect()
+    }
+
+    fn count_cheats_from(&self, threshold: usize, max_cheat: usize) -> usize {
+        self.cheats(max_cheat)
             .iter()
             .map(|(_, saving)| saving)
             .filter(|&&saving| saving >= threshold)
@@ -177,7 +196,7 @@ mod tests {
 
     #[test]
     fn can_list_cheats() {
-        let cheats = example_track().cheats();
+        let cheats = example_track().cheats(2);
 
         assert_eq!(cheats.get(&((1, 7), (1, 9))), Some(&12));
         assert_eq!(cheats.get(&((7, 9), (7, 11))), Some(&20));
@@ -191,7 +210,20 @@ mod tests {
     fn can_count_significant_cheats() {
         let track = example_track();
 
-        assert_eq!(track.count_cheats_from(4), 30);
-        assert_eq!(track.count_cheats_from(15), 5);
+        assert_eq!(track.count_cheats_from(4, 2), 30);
+        assert_eq!(track.count_cheats_from(15, 2), 5);
+
+        assert_eq!(track.count_cheats_from(50, 20), 285);
+        assert_eq!(track.count_cheats_from(72, 20), 29);
+    }
+
+    #[test]
+    fn can_find_track() {
+        let track = example_track();
+        let positions = track.get_track_positions();
+
+        assert_eq!(positions.len(), track.course.len());
+        assert_eq!(positions[0], (0, (3, 1)));
+        assert_eq!(positions[84], (84, (7, 5)));
     }
 }
