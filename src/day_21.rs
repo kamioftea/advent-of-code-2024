@@ -39,20 +39,6 @@ enum DirectionButton {
     Right,
 }
 
-impl TryFrom<char> for DirectionButton {
-    type Error = ();
-
-    fn try_from(value: char) -> Result<Self, Self::Error> {
-        match value {
-            '^' => Ok(Up),
-            '>' => Ok(Right),
-            'v' => Ok(Down),
-            '<' => Ok(Left),
-            _ => Err(()),
-        }
-    }
-}
-
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 enum NumberButton {
     Zero,
@@ -90,7 +76,58 @@ impl TryFrom<char> for NumberButton {
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 enum KeyPadButton<T> {
     Input(T),
-    Enter,
+    A,
+}
+
+trait Keys<T> {
+    fn coordinate(key: KeyPadButton<T>) -> Coordinates;
+    fn contains(coord: &Coordinates) -> bool;
+}
+
+impl Keys<NumberButton> for NumberButton {
+    fn coordinate(key: KeyPadButton<NumberButton>) -> Coordinates {
+        match key {
+            Input(Zero) => (3, 1),
+            Input(One) => (2, 0),
+            Input(Two) => (2, 1),
+            Input(Three) => (2, 2),
+            Input(Four) => (1, 0),
+            Input(Five) => (1, 1),
+            Input(Six) => (1, 2),
+            Input(Seven) => (0, 0),
+            Input(Eight) => (0, 1),
+            Input(Nine) => (0, 2),
+            A => (3, 2),
+        }
+    }
+
+    fn contains(coord: &Coordinates) -> bool {
+        match coord {
+            &(3, 0) => false,
+            &(r, c) if r <= 3 && c <= 2 => true,
+            _ => false,
+        }
+    }
+}
+
+impl Keys<DirectionButton> for DirectionButton {
+    fn coordinate(key: KeyPadButton<DirectionButton>) -> Coordinates {
+        match key {
+            Input(Up) => (0, 1),
+            Input(Right) => (1, 2),
+            Input(Down) => (1, 1),
+            Input(Left) => (1, 0),
+            A => (0, 2),
+        }
+    }
+
+    fn contains(coord: &Coordinates) -> bool {
+        match coord {
+            &(0, 0) => false,
+            &(r, c) if r <= 1 && c <= 2 => true,
+            _ => false,
+        }
+    }
 }
 
 type Coordinates = (u8, u8);
@@ -140,9 +177,9 @@ where
     }
 
     fn key_presses(&mut self, keys: &Vec<T>) -> usize {
-        once(Enter)
+        once(A)
             .chain(keys.iter().map(|&key| Input(key)))
-            .chain(once(Enter))
+            .chain(once(A))
             .tuple_windows()
             .map(|pair| self.presses_for_pair(pair))
             .sum()
@@ -210,57 +247,6 @@ where
     ) -> Vec<DirectionButton> {
         let char = if a < b { positive } else { negative };
         [char].repeat(a.abs_diff(b) as usize)
-    }
-}
-
-trait Keys<T> {
-    fn coordinate(key: KeyPadButton<T>) -> Coordinates;
-    fn contains(coord: &Coordinates) -> bool;
-}
-
-impl Keys<NumberButton> for NumberButton {
-    fn coordinate(key: KeyPadButton<NumberButton>) -> Coordinates {
-        match key {
-            Input(Zero) => (3, 1),
-            Input(One) => (2, 0),
-            Input(Two) => (2, 1),
-            Input(Three) => (2, 2),
-            Input(Four) => (1, 0),
-            Input(Five) => (1, 1),
-            Input(Six) => (1, 2),
-            Input(Seven) => (0, 0),
-            Input(Eight) => (0, 1),
-            Input(Nine) => (0, 2),
-            Enter => (3, 2),
-        }
-    }
-
-    fn contains(coord: &Coordinates) -> bool {
-        match coord {
-            &(3, 0) => false,
-            &(r, c) if r <= 3 && c <= 2 => true,
-            _ => false,
-        }
-    }
-}
-
-impl Keys<DirectionButton> for DirectionButton {
-    fn coordinate(key: KeyPadButton<DirectionButton>) -> Coordinates {
-        match key {
-            Input(Up) => (0, 1),
-            Input(Right) => (1, 2),
-            Input(Down) => (1, 1),
-            Input(Left) => (1, 0),
-            Enter => (0, 2),
-        }
-    }
-
-    fn contains(coord: &Coordinates) -> bool {
-        match coord {
-            &(0, 0) => false,
-            &(r, c) if r <= 1 && c <= 2 => true,
-            _ => false,
-        }
     }
 }
 
