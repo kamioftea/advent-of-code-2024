@@ -8,7 +8,6 @@ use crate::day_21::NumberButton::*;
 use itertools::{chain, Itertools};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::fs;
 use std::hash::Hash;
 use std::iter::once;
@@ -117,26 +116,45 @@ impl CoordinateExtensions for Coordinates {
     }
 }
 
-trait KeyPad<T>
+struct KeyPad<T> {
+    cache: HashMap<(KeyPadButton<T>, KeyPadButton<T>), usize>,
+    controller: Option<Rc<RefCell<KeyPad<DirectionButton>>>>,
+}
+
+impl<T> KeyPad<T>
 where
-    T: Copy + Clone + Sized,
+    T: Keys<T> + Copy + Clone + Eq + Hash,
 {
+    fn direct_entry() -> KeyPad<T> {
+        KeyPad::<T> {
+            cache: HashMap::new(),
+            controller: None::<Rc<RefCell<KeyPad<DirectionButton>>>>,
+        }
+    }
+
+    fn controlled_by(controller: KeyPad<DirectionButton>) -> KeyPad<T> {
+        KeyPad::<T> {
+            cache: HashMap::new(),
+            controller: Some(Rc::new(RefCell::new(controller))),
+        }
+    }
+
     fn key_presses(&mut self, keys: &Vec<T>) -> usize {
         once(Enter)
             .chain(keys.iter().map(|&key| Input(key)))
             .chain(once(Enter))
             .tuple_windows()
-            .map(|pair| self.expand_pair(pair))
+            .map(|pair| self.presses_for_pair(pair))
             .sum()
     }
 
-    fn expand_pair(&mut self, (a, b): (KeyPadButton<T>, KeyPadButton<T>)) -> usize {
-        if let Some(&result) = self.recall(a, b) {
+    fn presses_for_pair(&mut self, (a, b): (KeyPadButton<T>, KeyPadButton<T>)) -> usize {
+        if let Some(&result) = self.cache.get(&(a, b)) {
             return result;
         }
 
-        let (ra, ca) = Self::coordinate(a);
-        let (rb, cb) = Self::coordinate(b);
+        let (ra, ca) = T::coordinate(a);
+        let (rb, cb) = T::coordinate(b);
 
         let moves: Vec<DirectionButton> = chain(
             Self::repeat(Down, Up, ra, rb),
@@ -148,11 +166,11 @@ where
             .iter()
             .permutations(moves.len())
             .filter(|moves| Self::check_moves(moves, &(ra, ca)))
-            .map(|moves| self.iterate(moves))
+            .map(|moves| self.controller_presses(moves))
             .min()
             .expect("Failed to find safe route {a} -> {b}");
 
-        self.remember(a, b, count);
+        self.cache.insert((a, b), count);
 
         count
     }
@@ -162,7 +180,7 @@ where
         for &mv in moves {
             match position.apply_move(mv) {
                 Some(new_pos) => {
-                    if !Self::contains(&new_pos) {
+                    if !T::contains(&new_pos) {
                         return false;
                     }
                     position = new_pos
@@ -174,8 +192,8 @@ where
         true
     }
 
-    fn iterate(&mut self, moves: Vec<&DirectionButton>) -> usize {
-        match self.next() {
+    fn controller_presses(&mut self, moves: Vec<&DirectionButton>) -> usize {
+        match self.controller.clone() {
             Some(keypad) => {
                 let buttons = moves.into_iter().cloned().collect();
                 keypad.borrow_mut().key_presses(&buttons)
@@ -193,41 +211,14 @@ where
         let char = if a < b { positive } else { negative };
         [char].repeat(a.abs_diff(b) as usize)
     }
+}
 
+trait Keys<T> {
     fn coordinate(key: KeyPadButton<T>) -> Coordinates;
-
     fn contains(coord: &Coordinates) -> bool;
-
-    fn next(&self) -> Option<Rc<RefCell<DirectionalKeyPad>>>;
-
-    fn remember(&mut self, start: KeyPadButton<T>, end: KeyPadButton<T>, count: usize);
-
-    fn recall(&self, start: KeyPadButton<T>, end: KeyPadButton<T>) -> Option<&usize>;
 }
 
-struct NumericKeyPad {
-    next: Option<Rc<RefCell<DirectionalKeyPad>>>,
-    cache: HashMap<(KeyPadButton<NumberButton>, KeyPadButton<NumberButton>), usize>,
-}
-
-impl NumericKeyPad {
-    #[allow(dead_code)]
-    fn new_human() -> Self {
-        Self {
-            next: None,
-            cache: HashMap::new(),
-        }
-    }
-
-    fn controlled_by(keypad: DirectionalKeyPad) -> Self {
-        Self {
-            next: Some(Rc::new(RefCell::new(keypad))),
-            cache: HashMap::new(),
-        }
-    }
-}
-
-impl KeyPad<NumberButton> for NumericKeyPad {
+impl Keys<NumberButton> for NumberButton {
     fn coordinate(key: KeyPadButton<NumberButton>) -> Coordinates {
         match key {
             Input(Zero) => (3, 1),
@@ -251,51 +242,9 @@ impl KeyPad<NumberButton> for NumericKeyPad {
             _ => false,
         }
     }
-
-    fn next(&self) -> Option<Rc<RefCell<DirectionalKeyPad>>> {
-        self.next.clone()
-    }
-
-    fn remember(
-        &mut self,
-        start: KeyPadButton<NumberButton>,
-        end: KeyPadButton<NumberButton>,
-        count: usize,
-    ) {
-        self.cache.insert((start, end), count);
-    }
-
-    fn recall(
-        &self,
-        start: KeyPadButton<NumberButton>,
-        end: KeyPadButton<NumberButton>,
-    ) -> Option<&usize> {
-        self.cache.get(&(start, end))
-    }
 }
 
-struct DirectionalKeyPad {
-    next: Option<Rc<RefCell<DirectionalKeyPad>>>,
-    cache: HashMap<(KeyPadButton<DirectionButton>, KeyPadButton<DirectionButton>), usize>,
-}
-
-impl DirectionalKeyPad {
-    fn direct_entry() -> Self {
-        Self {
-            next: None,
-            cache: HashMap::new(),
-        }
-    }
-
-    fn controlled_by(next: DirectionalKeyPad) -> Self {
-        Self {
-            next: Some(Rc::new(RefCell::new(next))),
-            cache: HashMap::new(),
-        }
-    }
-}
-
-impl KeyPad<DirectionButton> for DirectionalKeyPad {
+impl Keys<DirectionButton> for DirectionButton {
     fn coordinate(key: KeyPadButton<DirectionButton>) -> Coordinates {
         match key {
             Input(Up) => (0, 1),
@@ -312,27 +261,6 @@ impl KeyPad<DirectionButton> for DirectionalKeyPad {
             &(r, c) if r <= 1 && c <= 2 => true,
             _ => false,
         }
-    }
-
-    fn next(&self) -> Option<Rc<RefCell<DirectionalKeyPad>>> {
-        self.next.clone()
-    }
-
-    fn remember(
-        &mut self,
-        start: KeyPadButton<DirectionButton>,
-        end: KeyPadButton<DirectionButton>,
-        count: usize,
-    ) {
-        self.cache.insert((start, end), count);
-    }
-
-    fn recall(
-        &self,
-        start: KeyPadButton<DirectionButton>,
-        end: KeyPadButton<DirectionButton>,
-    ) -> Option<&usize> {
-        self.cache.get(&(start, end))
     }
 }
 
@@ -358,14 +286,14 @@ fn parse_input(input: &String) -> Vec<Code> {
     input.lines().map(parse_code).collect()
 }
 
-fn keypad_chain(length: usize) -> NumericKeyPad {
-    let chain = (1..length).fold(DirectionalKeyPad::direct_entry(), |prev, _| {
-        DirectionalKeyPad::controlled_by(prev)
+fn keypad_chain(length: usize) -> KeyPad<NumberButton> {
+    let chain = (1..length).fold(KeyPad::direct_entry(), |prev, _| {
+        KeyPad::controlled_by(prev)
     });
-    NumericKeyPad::controlled_by(chain)
+    KeyPad::controlled_by(chain)
 }
 
-fn count_key_presses(codes: &Vec<Code>, door: &mut NumericKeyPad) -> usize {
+fn count_key_presses(codes: &Vec<Code>, door: &mut KeyPad<NumberButton>) -> usize {
     codes
         .iter()
         .map(|code| door.key_presses(&code.buttons) * code.value)
@@ -418,7 +346,7 @@ mod tests {
     #[test]
     fn can_expand_keys() {
         assert_eq!(
-            NumericKeyPad::new_human().key_presses(&example_codes()[0].buttons),
+            KeyPad::direct_entry().key_presses(&example_codes()[0].buttons),
             12
         );
     }
