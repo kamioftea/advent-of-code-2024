@@ -185,7 +185,7 @@ impl<T> KeyPad<T>
 where
     T: Keys<T> + Copy + Clone + Eq + Hash,
 {
-    /// A new [`Keypad`] that expects a person to be pressing the keys
+    /// A new [`KeyPad`] that expects a person to be pressing the keys
     fn direct_entry() -> KeyPad<T> {
         KeyPad::<T> {
             controller: None::<Rc<RefCell<KeyPad<DirectionalButton>>>>,
@@ -193,7 +193,7 @@ where
         }
     }
 
-    /// A new [`Keypad`] that expects a robot arm controlled by another pad to be pressing the keys
+    /// A new [`KeyPad`] that expects a robot arm controlled by another pad to be pressing the keys
     fn controlled_by(controller: KeyPad<DirectionalButton>) -> KeyPad<T> {
         KeyPad::<T> {
             controller: Some(Rc::new(RefCell::new(controller))),
