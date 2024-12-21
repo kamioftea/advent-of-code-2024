@@ -1,10 +1,23 @@
 //! This is my solution for [Advent of Code - Day 21: _Keypad Conundrum_](https://adventofcode.com/2024/day/21)
 //!
+//! [`parse_input`] Turns the codes into their value and sequence of [`NumericButton`] presses. [`DirectionalButton`]
+//! also exists to represent the keypads that move the robots rather than unlock the door. [`KeyPadButton`] is a sort
+//! of meta type that generically adds the [`A`] for enter button to each keypad.
 //!
+//! [`KeyPad`] Holds most of the business logic, with [`keypad_chain`] being used to create the chains specific to
+//! each part.
+//!
+//! [`Keys`] is the trait that provides how each keypad is laid out, and is implemented for each of the input button
+//! types.
+//!
+//! [`KeyPad::key_presses`] solves the puzzle, given a chain of the relevant length of that part. It delegates the
+//! movement between key presses to [`KeyPad::presses_for_pair`], which in turn generates the possible paths between
+//! the pair, and recurses to the next controller in the chain using [`KeyPad::controller_presses`]. To make part 2
+//! run quickly, [`KeyPad::presses_for_pair`] caches the result for each pair at that level.
 
-use crate::day_21::DirectionButton::*;
+use crate::day_21::DirectionalButton::*;
 use crate::day_21::KeyPadButton::*;
-use crate::day_21::NumberButton::*;
+use crate::day_21::NumericButton::*;
 use itertools::{chain, Itertools};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -23,24 +36,27 @@ pub fn run() {
 
     println!(
         "To open the first door takes {} key presses",
-        count_key_presses(&codes, &mut keypad_chain(2))
+        sum_complexities(&codes, &mut keypad_chain(2))
     );
+
     println!(
         "To open the second door takes {} key presses",
-        count_key_presses(&codes, &mut keypad_chain(25))
+        sum_complexities(&codes, &mut keypad_chain(25))
     );
 }
 
+/// The input buttons on pad that controls robot arm movements
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
-enum DirectionButton {
+enum DirectionalButton {
     Up,
     Down,
     Left,
     Right,
 }
 
+/// The input buttons on pad for entering numeric door unlock codes
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
-enum NumberButton {
+enum NumericButton {
     Zero,
     One,
     Two,
@@ -53,7 +69,7 @@ enum NumberButton {
     Nine,
 }
 
-impl TryFrom<char> for NumberButton {
+impl TryFrom<char> for NumericButton {
     type Error = ();
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
@@ -73,19 +89,23 @@ impl TryFrom<char> for NumberButton {
     }
 }
 
+/// A meta-type for including the enter button on each keypad type
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Hash)]
 enum KeyPadButton<T> {
     Input(T),
     A,
 }
 
+/// Encapsulates the layout of each set of keypad buttons
 trait Keys<T> {
+    /// What is the coordinate of a given button
     fn coordinate(key: KeyPadButton<T>) -> Coordinates;
+    /// Is this coordinate a valid button on this keypad
     fn contains(coord: &Coordinates) -> bool;
 }
 
-impl Keys<NumberButton> for NumberButton {
-    fn coordinate(key: KeyPadButton<NumberButton>) -> Coordinates {
+impl Keys<NumericButton> for NumericButton {
+    fn coordinate(key: KeyPadButton<NumericButton>) -> Coordinates {
         match key {
             Input(Zero) => (3, 1),
             Input(One) => (2, 0),
@@ -110,8 +130,8 @@ impl Keys<NumberButton> for NumberButton {
     }
 }
 
-impl Keys<DirectionButton> for DirectionButton {
-    fn coordinate(key: KeyPadButton<DirectionButton>) -> Coordinates {
+impl Keys<DirectionalButton> for DirectionalButton {
+    fn coordinate(key: KeyPadButton<DirectionalButton>) -> Coordinates {
         match key {
             Input(Up) => (0, 1),
             Input(Right) => (1, 2),
@@ -132,12 +152,14 @@ impl Keys<DirectionButton> for DirectionButton {
 
 type Coordinates = (u8, u8);
 
+/// Helpers for moving within a keypad
 trait CoordinateExtensions: Sized {
-    fn apply_move(&self, mv: &DirectionButton) -> Option<Self>;
+    fn apply_move(&self, mv: &DirectionalButton) -> Option<Self>;
 }
 
 impl CoordinateExtensions for Coordinates {
-    fn apply_move(&self, mv: &DirectionButton) -> Option<Self> {
+    /// The coordinate after pressing a specific direction key
+    fn apply_move(&self, mv: &DirectionalButton) -> Option<Self> {
         let (r, c) = self;
         let (dr, dc) = match mv {
             Up => (-1, 0),
@@ -153,38 +175,75 @@ impl CoordinateExtensions for Coordinates {
     }
 }
 
+/// Encodes a KeyPad. The layout comes from the button input type (T)(
 struct KeyPad<T> {
+    controller: Option<Rc<RefCell<KeyPad<DirectionalButton>>>>,
     cache: HashMap<(KeyPadButton<T>, KeyPadButton<T>), usize>,
-    controller: Option<Rc<RefCell<KeyPad<DirectionButton>>>>,
 }
 
 impl<T> KeyPad<T>
 where
     T: Keys<T> + Copy + Clone + Eq + Hash,
 {
+    /// A new [`Keypad`] that expects a person to be pressing the keys
     fn direct_entry() -> KeyPad<T> {
         KeyPad::<T> {
+            controller: None::<Rc<RefCell<KeyPad<DirectionalButton>>>>,
             cache: HashMap::new(),
-            controller: None::<Rc<RefCell<KeyPad<DirectionButton>>>>,
         }
     }
 
-    fn controlled_by(controller: KeyPad<DirectionButton>) -> KeyPad<T> {
+    /// A new [`Keypad`] that expects a robot arm controlled by another pad to be pressing the keys
+    fn controlled_by(controller: KeyPad<DirectionalButton>) -> KeyPad<T> {
         KeyPad::<T> {
-            cache: HashMap::new(),
             controller: Some(Rc::new(RefCell::new(controller))),
+            cache: HashMap::new(),
         }
     }
 
-    fn key_presses(&mut self, keys: &Vec<T>) -> usize {
-        once(A)
-            .chain(keys.iter().map(|&key| Input(key)))
-            .chain(once(A))
-            .tuple_windows()
-            .map(|pair| self.presses_for_pair(pair))
-            .sum()
+    /// Given positive and negative unit length movement keys for an axis, and a start and end point on that axis,
+    /// return the list of movements to move from the start to the end.
+    fn repeat(
+        positive: DirectionalButton,
+        negative: DirectionalButton,
+        a: u8,
+        b: u8,
+    ) -> Vec<DirectionalButton> {
+        let char = if a < b { positive } else { negative };
+        [char].repeat(a.abs_diff(b) as usize)
     }
 
+    /// Given a list of moves, follow them and check it doesn't leave the key pad
+    fn check_moves(moves: &Vec<&DirectionalButton>, start: &Coordinates) -> bool {
+        let mut position = start.clone();
+        for &mv in moves {
+            match position.apply_move(mv) {
+                Some(new_pos) => {
+                    if !T::contains(&new_pos) {
+                        return false;
+                    }
+                    position = new_pos
+                }
+                None => return false,
+            }
+        }
+
+        true
+    }
+
+    /// Given a list of moves, pass those up the keypad chain to get the total key presses needed for that move.
+    fn controller_presses(&mut self, moves: Vec<&DirectionalButton>) -> usize {
+        match self.controller.clone() {
+            Some(keypad) => {
+                let buttons = moves.into_iter().cloned().collect();
+                keypad.borrow_mut().key_presses(&buttons)
+            }
+            None => moves.len() + 1, // and A,
+        }
+    }
+
+    /// Work out the valid paths between two keys and recurse the required movements up the keypad chain to find the
+    /// route with the shortest number of presses. The result is cached for performance.
     fn presses_for_pair(&mut self, (a, b): (KeyPadButton<T>, KeyPadButton<T>)) -> usize {
         if let Some(&result) = self.cache.get(&(a, b)) {
             return result;
@@ -193,7 +252,7 @@ where
         let (ra, ca) = T::coordinate(a);
         let (rb, cb) = T::coordinate(b);
 
-        let moves: Vec<DirectionButton> = chain(
+        let moves: Vec<DirectionalButton> = chain(
             Self::repeat(Down, Up, ra, rb),
             Self::repeat(Right, Left, ca, cb),
         )
@@ -212,52 +271,29 @@ where
         count
     }
 
-    fn check_moves(moves: &Vec<&DirectionButton>, start: &Coordinates) -> bool {
-        let mut position = start.clone();
-        for &mv in moves {
-            match position.apply_move(mv) {
-                Some(new_pos) => {
-                    if !T::contains(&new_pos) {
-                        return false;
-                    }
-                    position = new_pos
-                }
-                None => return false,
-            }
-        }
-
-        true
-    }
-
-    fn controller_presses(&mut self, moves: Vec<&DirectionButton>) -> usize {
-        match self.controller.clone() {
-            Some(keypad) => {
-                let buttons = moves.into_iter().cloned().collect();
-                keypad.borrow_mut().key_presses(&buttons)
-            }
-            None => moves.len() + 1, // and A,
-        }
-    }
-
-    fn repeat(
-        positive: DirectionButton,
-        negative: DirectionButton,
-        a: u8,
-        b: u8,
-    ) -> Vec<DirectionButton> {
-        let char = if a < b { positive } else { negative };
-        [char].repeat(a.abs_diff(b) as usize)
+    /// Solves the puzzle for this keypad chain, return the number of key presses needed at the top of the keypad
+    /// chain to press the expected list of keys on this keypad.
+    fn key_presses(&mut self, keys: &Vec<T>) -> usize {
+        once(A)
+            .chain(keys.iter().map(|&key| Input(key)))
+            .chain(once(A))
+            .tuple_windows()
+            .map(|pair| self.presses_for_pair(pair))
+            .sum()
     }
 }
 
+/// Encode a code as the list of numeric button presses needed. The terminating `A` is assumed. Also parse the code
+/// as a number for complexity calculation
 #[derive(Eq, PartialEq, Debug)]
 struct Code {
-    buttons: Vec<NumberButton>,
+    buttons: Vec<NumericButton>,
     value: usize,
 }
 
+/// Given a line of puzzle input parse it as a code.
 fn parse_code(code: &str) -> Code {
-    let buttons = code.chars().flat_map(NumberButton::try_from).collect();
+    let buttons = code.chars().flat_map(NumericButton::try_from).collect();
     let value = code
         .chars()
         .filter(|c| c.is_digit(10))
@@ -268,18 +304,22 @@ fn parse_code(code: &str) -> Code {
     Code { buttons, value }
 }
 
+/// Turn the puzzle input into one code per line
 fn parse_input(input: &String) -> Vec<Code> {
     input.lines().map(parse_code).collect()
 }
 
-fn keypad_chain(length: usize) -> KeyPad<NumberButton> {
+/// Build a chain of keypads controlled by robot arms of the provided size. This will be 2 for part 1, and 25 for
+/// part 2.
+fn keypad_chain(length: usize) -> KeyPad<NumericButton> {
     let chain = (1..length).fold(KeyPad::direct_entry(), |prev, _| {
         KeyPad::controlled_by(prev)
     });
     KeyPad::controlled_by(chain)
 }
 
-fn count_key_presses(codes: &Vec<Code>, door: &mut KeyPad<NumberButton>) -> usize {
+/// Map the puzzles codes to their complexity and sum to get the puzzle solution
+fn sum_complexities(codes: &Vec<Code>, door: &mut KeyPad<NumericButton>) -> usize {
     codes
         .iter()
         .map(|code| door.key_presses(&code.buttons) * code.value)
@@ -328,17 +368,8 @@ mod tests {
         assert_eq!(parse_input(&input), example_codes());
     }
 
-    //noinspection SpellCheckingInspection
     #[test]
-    fn can_expand_keys() {
-        assert_eq!(
-            KeyPad::direct_entry().key_presses(&example_codes()[0].buttons),
-            12
-        );
-    }
-
-    #[test]
-    fn can_expand_part_1() {
+    fn can_count_key_presses() {
         let mut key_pad = keypad_chain(2);
 
         assert_eq!(key_pad.key_presses(&example_codes()[0].buttons), 68);
@@ -349,9 +380,9 @@ mod tests {
     }
 
     #[test]
-    fn can_solve_part_1() {
+    fn can_sum_complexities() {
         assert_eq!(
-            count_key_presses(&example_codes(), &mut keypad_chain(2)),
+            sum_complexities(&example_codes(), &mut keypad_chain(2)),
             126384
         )
     }
