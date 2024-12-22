@@ -437,23 +437,6 @@ remove the `PhantomData`
           }
       }
       
-      fn check_moves(moves: &Vec<&DirectionalButton>, start: &Coordinates) -> bool {
-          let mut position = start.clone();
-          for &mv in moves {
-              match position.apply_move(mv) {
-                  Some(new_pos) => {
-                      if !T::contains(&new_pos) {
-                          return false;
-                      }
-                      position = new_pos
-                  }
-                  None => return false,
-              }
-          }
-          
-          true
-      }
-      
 -     fn controller_presses(&self, moves: Vec<&DirectionalButton>) -> usize {
 +     fn controller_presses(&mut self, moves: Vec<&DirectionalButton>) -> usize {
           match self.controller.clone() {
