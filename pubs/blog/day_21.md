@@ -472,7 +472,7 @@ remove the `PhantomData`
               .map(|moves| self.controller_presses(moves))
               .min()
 -             .expect("Failed to find safe route {a} -> {b}")
--             .expect("Failed to find safe route {a} -> {b}");
++             .expect("Failed to find safe route {a} -> {b}");
 
 +         self.cache.insert((a, b), count);
 +
