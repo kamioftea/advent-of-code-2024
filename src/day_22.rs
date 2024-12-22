@@ -67,20 +67,20 @@ fn iterate_and_sum(seeds: &Vec<u64>) -> u64 {
 }
 
 fn populate_sequence_scores(
-    sequence_scores: &mut Vec<u32>,
-    seen: &mut Vec<u32>,
+    sequence_scores: &mut Vec<usize>,
+    seen: &mut Vec<usize>,
     seed: u64,
-    id: u32,
+    id: usize,
 ) {
     pseudorandom(seed)
         .take(2000)
-        .map(|secret| secret % 10)
+        .map(|secret| (secret % 10) as usize)
         .tuple_windows()
         .scan(0, |state, (prev, current)| {
             *state &= (1 << 15) - 1;
             *state <<= 5;
-            *state += (10 + current - prev) as usize;
-            Some((*state, current as u32))
+            *state += 10 + current - prev;
+            Some((*state, current))
         })
         .for_each(|(sequence, price)| {
             if seen[sequence] != id {
@@ -90,11 +90,11 @@ fn populate_sequence_scores(
         })
 }
 
-fn bananas_from_best_diff_sequence(seeds: &Vec<u64>) -> u32 {
+fn bananas_from_best_diff_sequence(seeds: &Vec<u64>) -> usize {
     let mut sequence_scores = vec![0; 0xFFFFF];
     let mut seen = vec![0; 0xFFFFF];
     for (idx, &seed) in seeds.iter().enumerate() {
-        populate_sequence_scores(&mut sequence_scores, &mut seen, seed, idx as u32 + 1);
+        populate_sequence_scores(&mut sequence_scores, &mut seen, seed, idx + 1);
     }
 
     sequence_scores.iter().max().unwrap_or(&0).clone()
