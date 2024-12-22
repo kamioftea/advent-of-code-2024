@@ -3,7 +3,6 @@
 //!
 
 use itertools::{iterate, Itertools};
-use rustc_hash::{FxHashMap, FxHashSet};
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -67,29 +66,38 @@ fn iterate_and_sum(seeds: &Vec<u64>) -> u64 {
         .sum()
 }
 
-fn populate_sequence_scores(sequence_scores: &mut FxHashMap<(u8, u8, u8, u8), u32>, seed: u64) {
-    let mut seen = FxHashSet::default();
+fn populate_sequence_scores(
+    sequence_scores: &mut Vec<u32>,
+    seen: &mut Vec<u32>,
+    seed: u64,
+    id: u32,
+) {
     pseudorandom(seed)
         .take(2000)
-        .map(|secret| (secret % 10) as u8)
+        .map(|secret| secret % 10)
         .tuple_windows()
-        .map(|(prev, current)| (10 + current - prev, current as u32))
-        .tuple_windows()
-        .for_each(|((a, _), (b, _), (c, _), (d, price))| {
-            let diff_sequence = (a, b, c, d);
-            if seen.insert(diff_sequence) {
-                *(sequence_scores.entry(diff_sequence).or_default()) += price;
+        .scan(0, |state, (prev, current)| {
+            *state &= (1 << 15) - 1;
+            *state <<= 5;
+            *state += (10 + current - prev) as usize;
+            Some((*state, current as u32))
+        })
+        .for_each(|(sequence, price)| {
+            if seen[sequence] != id {
+                seen[sequence] = id;
+                sequence_scores[sequence] += price
             }
         })
 }
 
 fn bananas_from_best_diff_sequence(seeds: &Vec<u64>) -> u32 {
-    let mut sequence_scores = FxHashMap::default();
-    for &seed in seeds {
-        populate_sequence_scores(&mut sequence_scores, seed);
+    let mut sequence_scores = vec![0; 0xFFFFF];
+    let mut seen = vec![0; 0xFFFFF];
+    for (idx, &seed) in seeds.iter().enumerate() {
+        populate_sequence_scores(&mut sequence_scores, &mut seen, seed, idx as u32 + 1);
     }
 
-    sequence_scores.values().max().unwrap_or(&0).clone()
+    sequence_scores.iter().max().unwrap_or(&0).clone()
 }
 
 fn parse_input(input: &String) -> Vec<u64> {
