@@ -454,7 +454,7 @@ remove the `PhantomData`
 +         if let Some(&result) = self.cache.get(&(a, b)) {
 +           return result;
 +         }
-        
++       
           let (ra, ca) = T::coordinate(a);
           let (rb, cb) = T::coordinate(b);
           
@@ -473,7 +473,7 @@ remove the `PhantomData`
               .min()
 -             .expect("Failed to find safe route {a} -> {b}")
 +             .expect("Failed to find safe route {a} -> {b}");
-
++
 +         self.cache.insert((a, b), count);
 +
 +         count
