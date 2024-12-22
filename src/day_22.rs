@@ -3,7 +3,7 @@
 //!
 
 use itertools::{iterate, Itertools};
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::fs;
 
 /// The entry point for running the solutions with the 'real' puzzle input.
@@ -67,22 +67,24 @@ fn iterate_and_sum(seeds: &Vec<u64>) -> u64 {
         .sum()
 }
 
-fn populate_sequence_scores(sequence_scores: &mut HashMap<(i8, i8, i8, i8), u64>, seed: u64) {
-    let mut seen = HashSet::new();
+fn populate_sequence_scores(sequence_scores: &mut FxHashMap<(u8, u8, u8, u8), u32>, seed: u64) {
+    let mut seen = FxHashSet::default();
     pseudorandom(seed)
         .take(2000)
-        .map(|secret| (secret % 10) as i8)
+        .map(|secret| (secret % 10) as u8)
         .tuple_windows()
-        .for_each(|(a, b, c, d, e)| {
-            let diff_sequence = (b - a, c - b, d - c, e - d);
+        .map(|(prev, current)| (10 + current - prev, current as u32))
+        .tuple_windows()
+        .for_each(|((a, _), (b, _), (c, _), (d, price))| {
+            let diff_sequence = (a, b, c, d);
             if seen.insert(diff_sequence) {
-                *(sequence_scores.entry(diff_sequence).or_default()) += e as u64;
+                *(sequence_scores.entry(diff_sequence).or_default()) += price;
             }
         })
 }
 
-fn bananas_from_best_diff_sequence(seeds: &Vec<u64>) -> u64 {
-    let mut sequence_scores = HashMap::new();
+fn bananas_from_best_diff_sequence(seeds: &Vec<u64>) -> u32 {
+    let mut sequence_scores = FxHashMap::default();
     for &seed in seeds {
         populate_sequence_scores(&mut sequence_scores, seed);
     }
