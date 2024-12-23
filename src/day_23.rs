@@ -1,6 +1,11 @@
 //! This is my solution for [Advent of Code - Day 23: _LAN Party_](https://adventofcode.com/2024/day/23)
 //!
+//! [`parse_input`] turns the input into a [`Network`] where each node can be mapped to the set of computer ids it's
+//! connected to.
 //!
+//! Part 1 is solved by [`Network::clusters_containing`] using [`Network::trios`]
+//!
+//! Part 2 is solved by [`Network::find_lan_password`] using [`Network::find_lan_password`]
 
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
@@ -19,15 +24,17 @@ pub fn run() {
         network.clusters_containing("t").len()
     );
 
-    println!("The password is {}", network.find_lan_password());
+    println!("The lan password is {}", network.find_lan_password());
 }
 
+/// Represents a network of computers as a map from any computer to the ids of its direct connections
 #[derive(Eq, PartialEq, Debug)]
 struct Network<'a> {
     links: HashMap<&'a str, HashSet<&'a str>>,
 }
 
 impl<'a> Network<'a> {
+    /// Find all the sets of three mutually interconnected computers
     fn trios(&self) -> HashSet<Vec<&str>> {
         let mut clusters = HashSet::new();
 
@@ -42,6 +49,8 @@ impl<'a> Network<'a> {
         clusters
     }
 
+    /// Uses [`Network::trios`] to find all clusters of three, and filters to only those where at least one computer
+    /// starts with the provided character
     fn clusters_containing(&self, char: &str) -> Vec<Vec<&str>> {
         self.trios()
             .iter()
@@ -50,23 +59,28 @@ impl<'a> Network<'a> {
             .collect()
     }
 
-    fn find_lan_password(&self) -> String {
-        let mut cliques: Vec<HashSet<&str>> = self
-            .links
-            .keys()
-            .map(|&pc| vec![pc].into_iter().collect())
-            .collect();
-
-        for clique in cliques.iter_mut() {
-            for computer in self.links.keys() {
-                if clique.iter().all(|b| self.links[computer].contains(b)) {
-                    clique.insert(*computer);
-                }
+    /// Given a starting computer id and the list of it's direct connections, find all that are also mutually
+    /// interconnected
+    fn find_fully_connected_cluster(
+        &self,
+        start: &'a str,
+        connected: &HashSet<&'a str>,
+    ) -> Vec<&str> {
+        let mut cluster = vec![start];
+        for computer in connected {
+            if cluster.iter().all(|b| self.links[computer].contains(b)) {
+                cluster.push(*computer);
             }
         }
+        cluster
+    }
 
-        cliques
+    /// For each node find a cluster that is fully interconnected, and then take the biggest and turn it into a
+    /// password.
+    fn find_lan_password(&self) -> String {
+        self.links
             .iter()
+            .map(|(&start, connected)| self.find_fully_connected_cluster(start, connected))
             .max_by_key(|c| c.len())
             .unwrap()
             .iter()
@@ -75,6 +89,7 @@ impl<'a> Network<'a> {
     }
 }
 
+/// Build a network from lines like `ab-cd` denoting that `ab` is directly connected to `cd`.
 fn parse_input(input: &String) -> Network {
     let mut links: HashMap<&str, HashSet<&str>> = HashMap::new();
 
